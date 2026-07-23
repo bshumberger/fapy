@@ -67,6 +67,20 @@ class Expression:
         """The empty sum, which contracts to nothing."""
         return cls([])
 
+    @classmethod
+    def identity(cls, policy=normal_ordered_blocks):
+        """The multiplicative unit: one term of coefficient 1 with NO blocks.
+
+        Multiplying any expression by this leaves it unchanged, since the product
+        just concatenates block tuples and appending an empty tuple is a no-op.
+        This is what a reference determinant ``<Phi_0|`` or ``|Phi_0>`` becomes at
+        the operator-string layer -- it contributes no operators, only the bracket
+        it sits in -- so a plain energy ``<Phi_0| expr |Phi_0>`` can be written as
+        ``identity * expr * identity`` and evaluated by the same path as a
+        projection onto an excited manifold.
+        """
+        return cls([ExprTerm(Fraction(1), (), policy)])
+
     # --- additive structure ---------------------------------------------------
 
     def __add__(self, other):
@@ -133,6 +147,26 @@ def commutator(a: Expression, b: Expression) -> Expression:
     sign, so the physical antisymmetry falls out of evaluating both products.
     """
     return a * b - b * a
+
+
+def nested_commutator(a: Expression, *rest: Expression) -> Expression:
+    """The left-nested commutator [[...[[A, B1], B2], ...], Bn].
+
+    Terms like [[H, T], T] appear all over the Baker-Campbell-Hausdorff expansion
+    a user does by hand before handing the engine an operator expression. Writing
+    those as ``commutator(commutator(commutator(h, t), t), t)`` is noisy, so this
+    folds the ordinary two-argument commutator from the left: the first argument
+    is the "inner" operator and each remaining argument is bracketed onto it in
+    turn. With no ``rest`` it just returns ``a`` unchanged (an empty nest).
+
+    The operators passed in must already use disjoint dummy labels where they
+    repeat (for example two doubles operators on ``i,j,a,b`` and ``k,l,c,d``);
+    the engine does not yet relabel dummies for you.
+    """
+    result = a
+    for b in rest:
+        result = commutator(result, b)
+    return result
 
 
 # --- evaluation ---------------------------------------------------------------

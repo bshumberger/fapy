@@ -1,24 +1,25 @@
 """
-Validation of the MP2 driver against the known result.
+Validation of the MP2 example input file against the known result.
 
-The MP2 correlation energy is (1/4) <ij||ab> t_ij^ab, and the doubles amplitude
-numerator is the integral <ab||ij>; both are reproduced here from the raw
-contractions with nothing put in by hand.
+Rather than build the problem here, we import ``examples/mp2.py`` -- the actual
+input file a user would write -- and assert on what its problems derive. The MP2
+correlation energy is (1/4) <ij||ab> t_ij^ab and the doubles amplitude numerator
+is the integral <ab||ij>; both are reproduced from the raw contractions.
 """
 
 from fractions import Fraction
 
-from deltapq.methods import mp2
+import mp2   # examples/mp2.py, on sys.path via tests/conftest.py
 
 
 def test_mp2_energy_is_quarter_integral_amplitude():
-    """E_MP2 collects to the single term (1/4) <ij||ab> t_ij^ab."""
-    terms = mp2.energy()
+    """The MP2 energy problem collects to (1/4) <ij||ab> t_ij^ab."""
+    terms = mp2.energy.derive()
 
     assert len(terms) == 1
     term = terms[0]
     assert term.coefficient == Fraction(1, 4)
-    assert sorted(t.name for t in term.tensors) == ["g", "t2"]
+    assert sorted(t.name for t in term.tensors) == ["g", "t"]
 
     # The integral and amplitude are summed over the same four dummy indices.
     integral, amplitude = term.tensors
@@ -26,8 +27,8 @@ def test_mp2_energy_is_quarter_integral_amplitude():
 
 
 def test_mp2_amplitude_numerator_is_the_integral():
-    """<Phi_ij^ab| V_N |Phi_0> collects to a single integral over i, j, a, b."""
-    terms = mp2.amplitude_residual()
+    """The MP2 numerator problem collects to a single integral over i, j, a, b."""
+    terms = mp2.amplitude.derive()
 
     assert len(terms) == 1
     term = terms[0]

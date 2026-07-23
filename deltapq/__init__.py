@@ -21,10 +21,17 @@ from .resolve import (
     format_resolved,
 )
 from .tensor import Tensor, OperatorBlock, Term, contract_blocks, block
-from .expression import Expression, ExprTerm, commutator, vev, project
+from .expression import (
+    Expression,
+    ExprTerm,
+    commutator,
+    nested_commutator,
+    vev,
+    project,
+)
 from .canonicalize import CanonicalTerm, canonicalize, canonical_tensor, format_canonical
+from .problem import Problem
 from . import operators
-from . import methods
 
 __version__ = "0.1.0"
 
@@ -57,12 +64,13 @@ __all__ = [
     "Expression",
     "ExprTerm",
     "commutator",
+    "nested_commutator",
     "vev",
     "project",
     "CanonicalTerm",
     "canonicalize",
     "canonical_tensor",
     "format_canonical",
+    "Problem",
     "operators",
-    "methods",
 ]

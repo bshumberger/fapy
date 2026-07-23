@@ -37,12 +37,29 @@ from .tensor import Tensor, block
 from .expression import Expression
 
 
+# --- permutational symmetries carried by the tensors --------------------------
+
+# Each symmetry is a tuple of (permutation, sign) generators; the canonicalizer
+# closes them into the full group. Stamping these onto the tensors here means the
+# symmetry travels with the operator, so an amplitude may be named anything.
+
+# Fock matrix f_pq: symmetric under p <-> q.
+_FOCK_SYM = (((1, 0), +1),)
+
+# Antisymmetrized integral <pq||rs>: antisymmetric in p<->q and r<->s, symmetric
+# under exchange of the pairs (pq) <-> (rs).
+_INTEGRAL_SYM = (((1, 0, 2, 3), -1), ((0, 1, 3, 2), -1), ((2, 3, 0, 1), +1))
+
+# Doubles amplitude x_ij^ab: antisymmetric in i<->j and in a<->b.
+_DOUBLES_SYM = (((1, 0, 2, 3), -1), ((0, 1, 3, 2), -1))
+
+
 # --- the normal-ordered Hamiltonian ------------------------------------------
 
 # F_N = sum_pq f_pq {a_p^ a_q}. The summation over p, q is implicit (Einstein
 # convention over the block's general indices); the tensor carries the labels.
 F_N = Expression.single(
-    block([cre("p", "gen"), ann("q", "gen")], Tensor("f", ("p", "q"))),
+    block([cre("p", "gen"), ann("q", "gen")], Tensor("f", ("p", "q"), _FOCK_SYM)),
     Fraction(1),
 )
 
@@ -51,7 +68,7 @@ F_N = Expression.single(
 V_N = Expression.single(
     block(
         [cre("p", "gen"), cre("q", "gen"), ann("s", "gen"), ann("r", "gen")],
-        Tensor("g", ("p", "q", "r", "s")),
+        Tensor("g", ("p", "q", "r", "s"), _INTEGRAL_SYM),
     ),
     Fraction(1, 4),
 )
@@ -75,7 +92,8 @@ def singles(name, i="i", a="a"):
     The operator string creates a particle (a_a^) and a hole (a_i): it is the
     single excitation from occupied i into virtual a. Whether the amplitude is a
     cluster amplitude ("t1"), a CI coefficient ("c1"), or anything else is purely
-    a matter of the ``name`` handed in -- the excitation itself is one object.
+    a matter of the ``name`` handed in -- the excitation itself is one object. The
+    singles amplitude carries no internal symmetry, so no annotation is attached.
     """
     return Expression.single(
         block([cre(a, "virt"), ann(i, "occ")], Tensor(name, (i, a))),
@@ -88,18 +106,32 @@ def doubles(name, i="i", j="j", a="a", b="b"):
 
     Note the reversed hole ordering a_j a_i mirroring the reversed annihilators
     in V_N. The 1/4 prefactor accompanies the antisymmetrized amplitude. As with
-    ``singles``, the role (CC vs CI vs residual) lives entirely in ``name``.
+    ``singles``, the role (CC vs CI vs residual) lives entirely in ``name``; the
+    doubles antisymmetry (i<->j, a<->b) is stamped onto the tensor so it is
+    collected correctly whatever the amplitude is named.
     """
     return Expression.single(
         block(
             [cre(a, "virt"), cre(b, "virt"), ann(j, "occ"), ann(i, "occ")],
-            Tensor(name, (i, j, a, b)),
+            Tensor(name, (i, j, a, b), _DOUBLES_SYM),
         ),
         Fraction(1, 4),
     )
 
 
-# --- projection manifolds (excited determinants) ------------------------------
+# --- projection manifolds (reference and excited determinants) ----------------
+
+def reference():
+    """The reference determinant <Phi_0| or |Phi_0> as a projection manifold.
+
+    The Fermi vacuum contributes no operators of its own -- it is only the bracket
+    a matrix element sits in -- so it is represented by the multiplicative unit of
+    the expression algebra. Using it as the bra AND the ket of a problem turns
+    ``<bra| expr |ket>`` into a plain energy ``<Phi_0| expr |Phi_0>`` without any
+    special-casing in the driver.
+    """
+    return Expression.identity()
+
 
 def bra_singles(i="i", a="a"):
     """The singly-excited bra <Phi_i^a| = <Phi_0| a_i^ a_a (no tensor)."""

@@ -43,9 +43,18 @@ class Tensor:
     ``<qp||rs>`` until symmetry is applied later -- so ``indices`` is a tuple and
     the tensor is frozen (hashable) for later use as a dictionary key when terms
     are collected.
+
+    ``symmetry`` records the tensor's own permutational symmetry as a tuple of
+    (permutation, sign) generators, so that the antisymmetry of an amplitude or
+    integral travels WITH the tensor rather than being looked up by name. This is
+    what lets a user name an amplitude anything they like in an input file and
+    still have it collected correctly. It carries no identifying weight -- two
+    tensors with the same name and indices are the same tensor regardless of the
+    symmetry annotation -- so it is excluded from equality and hashing.
     """
     name: str
     indices: Tuple[str, ...]
+    symmetry: Tuple = field(default=(), compare=False)
 
     def substitute(self, rep):
         """Return a copy with each index relabelled by the resolution map ``rep``.
@@ -53,9 +62,13 @@ class Tensor:
         ``rep`` maps an original label to its class representative, so spending
         the deltas amounts to sending every tensor index through it. Labels not
         mentioned by ``rep`` (there should be none for a fully contracted term)
-        are left unchanged.
+        are left unchanged. The symmetry annotation is carried along unchanged.
         """
-        return Tensor(self.name, tuple(rep.get(i, i) for i in self.indices))
+        return Tensor(
+            self.name,
+            tuple(rep.get(i, i) for i in self.indices),
+            self.symmetry,
+        )
 
     def __repr__(self):
         return f"{self.name}({','.join(self.indices)})"

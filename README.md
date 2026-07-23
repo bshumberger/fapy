@@ -20,11 +20,28 @@ with everything else vanishing.
 
 ## Status
 
-Early alpha. The contraction kernel (operators, the elementary contraction
-rule, the full-contraction driver, and the generalized-Wick bookkeeping for
-pre-normal-ordered blocks) is implemented and verified against hand-worked
-examples. The delta-resolution, tensor, expression, and method-driver layers
-are being built up in verified stages.
+Early alpha, but the full pipeline is implemented and verified: the contraction
+kernel, delta resolution, the tensor layer (overall sign pinned against the
+notes), the expression algebra (sums, products, commutators), canonicalization
+and term collection, and the `Problem` input-file interface. Validated against
+the MP2/CISD/CCSD energies and the MP2 amplitude numerator.
+
+`deltapq` is a **general derivation engine, not a set of methods**. You state a
+problem in a short Python input file and it returns the collected equation.
+
+```python
+from deltapq import Problem, operators as op
+
+Problem(
+    name = "MP2 energy",
+    bra  = op.reference(),
+    expr = op.V_N * op.doubles("t"),
+    ket  = op.reference(),
+).report()
+# MP2 energy: 1/4 g(O0,O1,V0,V1) t(O0,O1,V0,V1)
+```
+
+See `examples/{mp2,cisd,ccsd}.py` for worked input files.
 
 ## Layout
 
@@ -32,8 +49,16 @@ are being built up in verified stages.
 deltapq/
     core.py          operators and constructors (the "nouns")
     contraction.py   the elementary contraction rule + matching combinatorics
-    wick.py          the full-contraction driver + pretty-printer
+    wick.py          the full-contraction driver
+    policy.py        which pairs may contract (generalized Wick, ...)
+    resolve.py       delta resolution + occupancy propagation
+    tensor.py        tensors attached to blocks; resolved Terms
+    expression.py    the expression algebra (+, *, commutator, nested_commutator)
+    operators.py     the operator library (H_N/F_N/V_N, excitations, manifolds)
+    canonicalize.py  tensor symmetry + dummy renaming + term collection
+    problem.py       the Problem input-file interface
     tests/           in-package pytest suite; doubles as the correctness proof
+examples/            example input files (MP2, CISD, CCSD)
 ```
 
 ## Running the tests

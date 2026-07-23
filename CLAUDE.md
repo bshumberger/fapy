@@ -3,10 +3,18 @@
 ## Purpose
 
 A symbolic Wick-contraction engine in the quasi-particle (Fermi-vacuum) picture,
-built toward deriving coupled-cluster energy and amplitude equations.
+for deriving second-quantized energy and amplitude equations.
 
-Working code exists and is verified for contractions. The tensor/integral layer,
-term collection, and CC operator constructors are **not yet built**.
+It is a **general derivation engine, not a collection of methods.** The user
+states a problem in a small Python **input file** — an operator expression
+sandwiched between two determinants, `<bra| expr |ket>` — and the engine
+contracts, resolves, and collects it into the finished symbolic equation. MP2,
+CISD, and CCSD are **example input files** (`examples/*.py`) and regression
+scenarios, *not* shipped methods.
+
+The full pipeline is built and verified (kernel → policy → delta resolution →
+tensors → expression layer → canonicalization → `Problem` input interface),
+against MP2/CISD/CCSD energies and the MP2 amplitude numerator.
 
 ---
 
@@ -249,6 +257,44 @@ where the design would collapse.
 
 Analytic gradients, triples, and multipliers are far past CC energy and
 amplitudes. Not a near-term target.
+
+---
+
+## Input files (the `Problem` interface)
+
+A user states a derivation as a Python input file that builds an operator
+expression and wraps it in a `Problem`:
+
+```python
+from deltapq import Problem, operators as op
+
+Problem(
+    name = "MP2 energy",
+    bra  = op.reference(),            # <Phi_0|   (op.bra_doubles(...) for a projection)
+    expr = op.V_N * op.doubles("t"),  # the operator expression — the "problem"
+    ket  = op.reference(),            # |Phi_0>
+).report()
+```
+
+- `expr` is built from the operator library (`H_N`/`F_N`/`V_N`,
+  `singles(name)`/`doubles(name)`) and the expression algebra (`*`, `+`,
+  `commutator`, `nested_commutator`).
+- `bra`/`ket` are projection manifolds; their labels are the **external**
+  indices, inferred automatically (override via `externals=`).
+- `Problem.derive()` returns collected `CanonicalTerm`s; `.report()` prints them.
+- The user does any **BCH / `exp(T)` expansion by hand** and hands the engine the
+  resulting expression; `nested_commutator(H, T, T, ...)` transcribes
+  `[[H,T],T]`-style terms. See `examples/{mp2,cisd,ccsd}.py`.
+
+### Desirable future features (not built)
+- **User-defined custom operators.** Today a problem composes only the built-in
+  operators. Letting an input file declare a *new* operator (its creation/
+  annihilation string, prefactor, amplitude tensor, and symmetry) would make the
+  engine fully general. Symmetry already travels on the `Tensor` (annotation
+  carried by the operator constructors), so this is the natural next extension.
+- **Automatic dummy relabeling** so repeated operators (e.g. `T1*T1`,
+  `[[H,T2],T2]`) need not be given disjoint index labels by hand.
+- `exp(T)` / BCH truncation as a built-in; LaTeX output.
 
 ---
 

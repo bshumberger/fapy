@@ -9,7 +9,7 @@ reversed annihilator ordering demanded by the notes.
 
 from fractions import Fraction
 
-from deltapq.expression import Expression, commutator, project, vev
+from deltapq.expression import Expression, commutator, nested_commutator, project, vev
 from deltapq import operators as ops
 
 
@@ -33,6 +33,27 @@ def test_commutator_expands_to_ab_minus_ba():
     assert ab.blocks == a.terms[0].blocks + b.terms[0].blocks
     assert ba.blocks == b.terms[0].blocks + a.terms[0].blocks
     assert ab.coefficient == -ba.coefficient
+
+
+def test_nested_commutator_folds_from_the_left():
+    """nested_commutator(A, B, C) equals commutator(commutator(A, B), C)."""
+    # Use three distinct operators so the two ways of writing the nest are
+    # comparable term by term (blocks and coefficients).
+    a = ops.F_N
+    b = ops.doubles("t", "i", "j", "a", "b")
+    c = ops.doubles("t", "k", "l", "c", "d")
+
+    folded = nested_commutator(a, b, c)
+    manual = commutator(commutator(a, b), c)
+
+    def signature(expr):
+        # Compare as a multiset of terms, keyed on the coefficient and a string
+        # form of the blocks (OperatorBlocks are not orderable themselves).
+        return sorted((str(t.coefficient), repr(t.blocks)) for t in expr.terms)
+
+    assert signature(folded) == signature(manual)
+    # A bare nest with no further operators is just the operator itself.
+    assert signature(nested_commutator(a)) == signature(a)
 
 
 # --- a hand-checkable projection ----------------------------------------------

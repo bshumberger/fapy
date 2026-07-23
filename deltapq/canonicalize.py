@@ -37,7 +37,11 @@ from .tensor import Tensor
 # Each tensor name maps to a list of GENERATOR symmetries, written as
 # (permutation, sign): applying the permutation to the index tuple multiplies the
 # term by the sign. The full symmetry group is generated from these by closure.
-# A name absent from this table has only the trivial (identity) symmetry.
+# A name absent from this table has only the trivial (identity) symmetry. This
+# table is only a FALLBACK: tensors built by the operator library carry their own
+# symmetry annotation (see ``operators.py``), which is preferred so that a user
+# may name an amplitude anything. The table still serves hand-built tensors (in
+# tests, say) that were created without an explicit symmetry.
 _SYMMETRY_GENERATORS = {
     # Fock matrix f_pq is symmetric under p <-> q.
     "f": [((1, 0), +1)],
@@ -51,15 +55,27 @@ _SYMMETRY_GENERATORS = {
 }
 
 
-def _symmetry_orbit(name, indices):
+def _tensor_generators(tensor):
+    """Return the symmetry generators to use for ``tensor``.
+
+    The tensor's own annotation wins if it has one, so amplitudes and integrals
+    built by the operator library carry their antisymmetry regardless of name.
+    Only when a tensor was built with no annotation do we fall back to the
+    name-keyed table above.
+    """
+    if tensor.symmetry:
+        return tensor.symmetry
+    return _SYMMETRY_GENERATORS.get(tensor.name, [])
+
+
+def _symmetry_orbit(generators, indices):
     """Yield every (index tuple, sign) reachable from ``indices`` by symmetry.
 
     Starting from the given index tuple with sign +1, we repeatedly apply the
-    tensor's generator permutations until no new signed arrangement appears. This
-    closes the generators into the full symmetry group, expressed directly as the
-    set of arrangements the tensor's indices can take.
+    generator permutations until no new signed arrangement appears. This closes
+    the generators into the full symmetry group, expressed directly as the set of
+    arrangements the tensor's indices can take.
     """
-    generators = _SYMMETRY_GENERATORS.get(name, [])
     # A breadth-first closure over states, each a (index tuple, sign) pair.
     seen = {tuple(indices): 1}
     frontier = [tuple(indices)]
@@ -82,15 +98,17 @@ def canonical_tensor(tensor):
     Among all index orderings the tensor's symmetry permits, we pick the smallest
     tuple and return it together with the sign picked up getting there. This is
     the per-tensor half of canonicalization; the dummy renaming around it is what
-    makes two whole terms comparable.
+    makes two whole terms comparable. The reduced tensor keeps the original's
+    symmetry annotation.
     """
+    generators = _tensor_generators(tensor)
     best_idx = None
     best_sign = 1
-    for idx, sign in _symmetry_orbit(tensor.name, tensor.indices):
+    for idx, sign in _symmetry_orbit(generators, tensor.indices):
         if best_idx is None or idx < best_idx:
             best_idx = idx
             best_sign = sign
-    return Tensor(tensor.name, best_idx), best_sign
+    return Tensor(tensor.name, best_idx, tensor.symmetry), best_sign
 
 
 # --- canonical form of a whole term -------------------------------------------
@@ -153,10 +171,9 @@ def canonicalize_term(term, external_set, external_spaces):
             sign = 1
             canon = []
             for tensor in term.tensors:
-                renamed = Tensor(
-                    tensor.name,
-                    tuple(rename.get(l, l) for l in tensor.indices),
-                )
+                # Relabel through the dummy map while carrying the tensor's own
+                # symmetry annotation along, so the reduction below still knows it.
+                renamed = tensor.substitute(rename)
                 reduced, s = canonical_tensor(renamed)
                 sign *= s
                 canon.append((reduced.name, reduced.indices))
