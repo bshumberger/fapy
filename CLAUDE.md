@@ -165,11 +165,18 @@ class Term:
 ### Stage 3 — Operator constructors
 Expand into grouped operator strings with attached tensors and prefactors:
 ```
-F_N = sum_pq f_pq {a_p^ a_q}
-V_N = (1/4) sum_pqrs <pq||rs> {a_p^ a_q^ a_s a_r}
-T_1 = sum_ia t_i^a {a_a^ a_i}
-T_2 = (1/4) sum_ijab t_ij^ab {a_a^ a_b^ a_j a_i}
+F_N     = sum_pq f_pq {a_p^ a_q}
+V_N     = (1/4) sum_pqrs <pq||rs> {a_p^ a_q^ a_s a_r}
+singles = sum_ia x_i^a {a_a^ a_i}
+doubles = (1/4) sum_ijab x_ij^ab {a_a^ a_b^ a_j a_i}
 ```
+`singles` and `doubles` are the **excitation operators** of the reference. They
+are single objects, not a separate T (cluster) and C (CI) set: the amplitude
+tensor name `x` is supplied by the caller, so the same excitation serves as a CC
+`t`-amplitude, a CI `c`-coefficient, a residual, etc. What distinguishes the
+methods is how a driver *uses* the excitation operators (linearly in CI,
+exponentially in CC), not the operators themselves.
+
 **Watch the annihilator ordering** — `a_s a_r` and `a_j a_i`, reversed relative
 to the creators. Check against Eq. (54) in `main.pdf`. Getting this wrong is a
 silent sign error.

@@ -17,14 +17,14 @@ outside the symbolic engine; the driver produces the tensor structure only.
 
 from ..expression import vev, project
 from ..canonicalize import canonicalize
-from ..operators import V_N, T2, bra_doubles
+from ..operators import V_N, doubles, bra_doubles
 
 
 def energy():
     """Return the collected MP2 correlation-energy expression (1/4) <ij||ab> t_ij^ab."""
     # The doubles contraction against the fluctuation potential is the whole MP2
     # energy; canonicalization folds the several raw terms into the single result.
-    return canonicalize(vev(V_N * T2()))
+    return canonicalize(vev(V_N * doubles("t2")))
 
 
 def amplitude_residual():

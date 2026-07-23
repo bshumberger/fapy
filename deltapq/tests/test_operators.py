@@ -18,7 +18,7 @@ from deltapq import operators as ops
 def test_commutator_expands_to_ab_minus_ba():
     """[A, B] produces exactly two terms: +A*B and -B*A with swapped blocks."""
     a = ops.F_N
-    b = ops.T2()
+    b = ops.doubles("t2")
     comm = commutator(a, b)
 
     # A and B are each a single term, so the commutator has two: the AB ordering
@@ -64,7 +64,7 @@ def test_v_n_with_t2_is_nonzero_and_carries_both_tensors():
     integral g and the amplitude t2, with the clean value deferred to the method
     stage (which needs canonicalization).
     """
-    terms = vev(ops.V_N * ops.T2())
+    terms = vev(ops.V_N * ops.doubles("t2"))
 
     assert len(terms) > 0
     for term in terms:
@@ -82,8 +82,8 @@ def test_reversed_annihilator_ordering_in_v_and_doubles():
     v_labels = [(o.label, o.dagger) for o in v_block.ops]
     assert v_labels == [("p", True), ("q", True), ("s", False), ("r", False)]
 
-    # T2: creators on (a, b), annihilators on (j, i) -- i.e. a_j a_i, reversed.
-    (t_term,) = ops.T2().terms
+    # doubles: creators on (a, b), annihilators on (j, i) -- i.e. a_j a_i, reversed.
+    (t_term,) = ops.doubles("t2").terms
     (t_block,) = t_term.blocks
     t_labels = [(o.label, o.dagger) for o in t_block.ops]
     assert t_labels == [("a", True), ("b", True), ("j", False), ("i", False)]

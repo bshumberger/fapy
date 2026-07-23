@@ -10,14 +10,19 @@ Hamiltonian"):
     V_N = (1/4) sum_pqrs <pq||rs> {a_p^ a_q^ a_s a_r}
 
 Note the reversed annihilator ordering ``a_s a_r`` in V_N (and ``a_j a_i`` in the
-doubles operators): the annihilators run in the opposite order to the creators.
-Getting that order wrong is a silent sign error, so it is asserted by a test.
+doubles excitation operator): the annihilators run in the opposite order to the
+creators. Getting that order wrong is a silent sign error, so it is asserted by a
+test.
 
-The cluster (T) and linear CI (C) operators share the same operator strings and
-differ only in the amplitude tensor they carry, which is exactly why one kernel
-serves both coupled cluster and configuration interaction. The projection
-manifolds ``bra_*`` / ``ket_*`` are the excited determinants a method projects
-onto; they carry no tensor of their own.
+The excitation operators ``singles`` and ``doubles`` are the elementary
+excitations of the reference. They are the SAME objects whether they play the
+role of a coupled-cluster T operator or a configuration-interaction C operator --
+the only thing that varies is the amplitude tensor they carry, whose name the
+caller supplies. What actually distinguishes the methods is how a driver USES
+them (linearly in CI, exponentially in CC), not the operators themselves, so a
+single definition serves every method. The projection manifolds ``bra_*`` /
+``ket_*`` are the excited determinants a method projects onto; they carry no
+tensor of their own.
 
 The orbital-rotation pieces ``E`` and ``E_minus`` are provided so that
 orbital-response commutators can be written down; the full ``kappa`` operator is
@@ -55,14 +60,22 @@ V_N = Expression.single(
 H_N = F_N + V_N
 
 
-# --- cluster and configuration-interaction excitation operators ---------------
+# --- excitation operators -----------------------------------------------------
 
-def _singles(name, i, a):
-    """Build a singles operator sum_ia x_i^a {a_a^ a_i} carrying tensor ``name``.
+# These are the elementary excitations of the reference. They are FACTORIES
+# rather than fixed objects for two reasons: the amplitude tensor ``name`` is
+# supplied by the caller (so the same excitation can appear as a CC t-amplitude,
+# a CI c-amplitude, a residual, ...), and a product of two of them (for example
+# the singles-squared term in the CC energy) needs each factor to use its own
+# disjoint set of dummy indices, which the caller sets through the labels.
 
-    The operator string creates a particle (a_a^) and a hole (a_i), i.e. it is
-    the single excitation from occupied i into virtual a. Both T1 and C1 share
-    this string and differ only in the amplitude tensor name.
+def singles(name, i="i", a="a"):
+    """The single excitation operator sum_ia x_i^a {a_a^ a_i} carrying ``name``.
+
+    The operator string creates a particle (a_a^) and a hole (a_i): it is the
+    single excitation from occupied i into virtual a. Whether the amplitude is a
+    cluster amplitude ("t1"), a CI coefficient ("c1"), or anything else is purely
+    a matter of the ``name`` handed in -- the excitation itself is one object.
     """
     return Expression.single(
         block([cre(a, "virt"), ann(i, "occ")], Tensor(name, (i, a))),
@@ -70,11 +83,12 @@ def _singles(name, i, a):
     )
 
 
-def _doubles(name, i, j, a, b):
-    """Build a doubles operator (1/4) sum_ijab x_ij^ab {a_a^ a_b^ a_j a_i}.
+def doubles(name, i="i", j="j", a="a", b="b"):
+    """The double excitation operator (1/4) sum_ijab x_ij^ab {a_a^ a_b^ a_j a_i}.
 
     Note the reversed hole ordering a_j a_i mirroring the reversed annihilators
-    in V_N. The 1/4 prefactor accompanies the antisymmetrized amplitude.
+    in V_N. The 1/4 prefactor accompanies the antisymmetrized amplitude. As with
+    ``singles``, the role (CC vs CI vs residual) lives entirely in ``name``.
     """
     return Expression.single(
         block(
@@ -83,30 +97,6 @@ def _doubles(name, i, j, a, b):
         ),
         Fraction(1, 4),
     )
-
-
-# Cluster operators (coupled cluster) and linear excitation operators (CI).
-# These are FACTORIES rather than fixed objects because a product of two of them
-# (for example the T1-squared term in the CC energy) needs each factor to use its
-# own disjoint set of dummy indices; the caller supplies those labels here.
-def T1(i="i", a="a"):
-    """The cluster singles operator on the given occupied/virtual labels."""
-    return _singles("t1", i, a)
-
-
-def T2(i="i", j="j", a="a", b="b"):
-    """The cluster doubles operator on the given occupied/virtual labels."""
-    return _doubles("t2", i, j, a, b)
-
-
-def C1(i="i", a="a"):
-    """The linear CI singles operator on the given occupied/virtual labels."""
-    return _singles("c1", i, a)
-
-
-def C2(i="i", j="j", a="a", b="b"):
-    """The linear CI doubles operator on the given occupied/virtual labels."""
-    return _doubles("c2", i, j, a, b)
 
 
 # --- projection manifolds (excited determinants) ------------------------------

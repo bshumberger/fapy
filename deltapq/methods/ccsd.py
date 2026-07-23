@@ -20,7 +20,7 @@ from fractions import Fraction
 
 from ..expression import vev
 from ..canonicalize import canonicalize
-from ..operators import H_N, T1, T2
+from ..operators import H_N, singles, doubles
 
 
 def energy():
@@ -30,9 +30,11 @@ def energy():
     T1 + T2 and on the quadratic (1/2) T1^2. Products where H_N cannot fully
     contract (for example F_N with T2) contribute nothing and drop out.
     """
-    # H_N on the linear cluster operators gives the singles-Fock and doubles
-    # terms; H_N on (1/2) T1^2 gives the connected product of two singles.
-    linear = H_N * (T1() + T2())
-    t1_squared = Fraction(1, 2) * (H_N * (T1("i", "a") * T1("j", "b")))
+    # The cluster operators are the shared excitation operators carrying the "t"
+    # amplitude names. H_N on the linear T1 + T2 gives the singles-Fock and
+    # doubles terms; H_N on (1/2) T1^2 gives the connected product of two singles,
+    # whose two factors take disjoint index labels so each carries its own dummies.
+    linear = H_N * (singles("t1") + doubles("t2"))
+    t1_squared = Fraction(1, 2) * (H_N * (singles("t1", "i", "a") * singles("t1", "j", "b")))
 
     return canonicalize(vev(linear) + vev(t1_squared))
