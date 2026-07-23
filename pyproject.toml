@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+# Self-descriptive entries which should always be present
+# https://packaging.python.org/en/latest/specifications/declaring-project-metadata/
+[project]
+name = "deltapq"
+version = "0.1.0"
+description = "Symbolic second-quantization / Wick-contraction engine in the quasi-particle picture."
+readme = "README.md"
+authors = [
+    { name = "Brendan M. Shumberger", email = "bshumberger@vt.edu" }
+]
+license = { text = "BSD-3-Clause" }
+# See https://pypi.org/classifiers/
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Chemistry",
+]
+requires-python = ">=3.10"
+# The engine is intentionally pure-Python (stdlib only) so that a symbolic
+# derivation never drags in a numerical stack. No runtime dependencies.
+dependencies = []
+
+[project.optional-dependencies]
+test = [
+  "pytest>=6.1",
+]
+
+[tool.setuptools]
+zip-safe = false
+include-package-data = false
+
+[tool.setuptools.packages.find]
+namespaces = false
+where = ["."]
+
+[tool.setuptools.package-data]
+deltapq = [
+    "py.typed"
+]
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: marks tests as slow-running (deselect with '-m \"not slow\"')",
+]
