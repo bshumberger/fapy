@@ -1,20 +1,27 @@
 """
-Validation of the MP2 example input file against the known result.
+Validation of an MP2 input problem against the known result.
 
-Rather than build the problem here, we import ``examples/mp2.py`` -- the actual
-input file a user would write -- and assert on what its problems derive. The MP2
-correlation energy is (1/4) <ij||ab> t_ij^ab and the doubles amplitude numerator
-is the integral <ab||ij>; both are reproduced from the raw contractions.
+The input file -- the ``Problem`` a user would write -- is built directly in each
+test rather than imported from anywhere. MP2 gives two clean problems: the
+correlation energy (1/4) <ij||ab> t_ij^ab, and the doubles amplitude numerator
+<ab||ij>, both reproduced from the raw contractions.
 """
 
 from fractions import Fraction
 
-import mp2   # examples/mp2.py, on sys.path via tests/conftest.py
+from deltapq import Problem, operators as op
 
 
 def test_mp2_energy_is_quarter_integral_amplitude():
     """The MP2 energy problem collects to (1/4) <ij||ab> t_ij^ab."""
-    terms = mp2.energy.derive()
+    # The correlation energy: no projection, so both bra and ket are the reference.
+    energy = Problem(
+        name="MP2 energy",
+        bra=op.reference(),
+        expr=op.V_N * op.doubles("t"),
+        ket=op.reference(),
+    )
+    terms = energy.derive()
 
     assert len(terms) == 1
     term = terms[0]
@@ -28,7 +35,15 @@ def test_mp2_energy_is_quarter_integral_amplitude():
 
 def test_mp2_amplitude_numerator_is_the_integral():
     """The MP2 numerator problem collects to a single integral over i, j, a, b."""
-    terms = mp2.amplitude.derive()
+    # Project the fluctuation potential onto the doubly-excited bra; the external
+    # indices i, j, a, b are read off that manifold automatically.
+    amplitude = Problem(
+        name="MP2 doubles numerator",
+        bra=op.bra_doubles("i", "j", "a", "b"),
+        expr=op.V_N,
+        ket=op.reference(),
+    )
+    terms = amplitude.derive()
 
     assert len(terms) == 1
     term = terms[0]

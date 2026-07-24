@@ -1,15 +1,15 @@
 """
-Validation of the CISD example input file against the known correlation energy.
+Validation of a CISD input problem against the known correlation energy.
 
-We import ``examples/cisd.py`` and assert on what it derives. The CISD
-correlation energy is f_ia c_i^a + (1/4) <ij||ab> c_ij^ab: the singles couple
-through the Fock operator and the doubles through the fluctuation potential, while
-the mismatched products vanish.
+The input ``Problem`` is built directly in the test. The CISD correlation energy
+is f_ia c_i^a + (1/4) <ij||ab> c_ij^ab: the singles couple through the Fock
+operator and the doubles through the fluctuation potential, while the mismatched
+products vanish.
 """
 
 from fractions import Fraction
 
-import cisd   # examples/cisd.py, on sys.path via tests/conftest.py
+from deltapq import Problem, operators as op
 
 
 def _summary(terms):
@@ -22,7 +22,15 @@ def _summary(terms):
 
 def test_cisd_energy_terms():
     """The CISD energy problem collects to f_ia c_i^a + (1/4) <ij||ab> c_ij^ab."""
-    terms = cisd.energy.derive()
+    # The CI wavefunction is linear in the excitation operators; naming their
+    # amplitudes "c" marks them as CI coefficients.
+    energy = Problem(
+        name="CISD energy",
+        bra=op.reference(),
+        expr=op.H_N * (op.singles("c") + op.doubles("c")),
+        ket=op.reference(),
+    )
+    terms = energy.derive()
 
     assert _summary(terms) == {
         (Fraction(1), ("c", "f")),

@@ -41,7 +41,8 @@ Problem(
 # MP2 energy: 1/4 g(O0,O1,V0,V1) t(O0,O1,V0,V1)
 ```
 
-See `examples/{mp2,cisd,ccsd}.py` for worked input files.
+See the worked problems in `deltapq/tests/test_007_MP2.py`,
+`test_008_CISD.py`, and `test_009_CCSD.py`.
 
 ## Layout
 
@@ -57,8 +58,8 @@ deltapq/
     operators.py     the operator library (H_N/F_N/V_N, excitations, manifolds)
     canonicalize.py  tensor symmetry + dummy renaming + term collection
     problem.py       the Problem input-file interface
-    tests/           in-package pytest suite; doubles as the correctness proof
-examples/            example input files (MP2, CISD, CCSD)
+    tests/           in-package pytest suite; the MP2/CISD/CCSD problems
+                     are stated inline as worked examples
 ```
 
 ## Running the tests

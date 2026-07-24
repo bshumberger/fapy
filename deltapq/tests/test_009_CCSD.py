@@ -1,18 +1,19 @@
 """
-Validation of the CCSD example input file against the known correlation energy.
+Validation of a CCSD input problem against the known correlation energy.
 
-We import ``examples/ccsd.py`` and assert on what it derives. The CCSD
-correlation energy has three contributions,
+The input ``Problem`` is built directly in the test. Coupled cluster parametrizes
+the wavefunction as exp(T)|Phi_0>, and deltapq does NOT expand exp(T) for you --
+the user hands it the connected expression. The surviving energy terms are
 
     E_corr = f_ia t_i^a  +  (1/4) <ij||ab> t_ij^ab  +  (1/2) <ij||ab> t_i^a t_j^b,
 
 the singles-Fock term, the doubles term, and the connected product of two
-singles. All three are reproduced, including the 1/2 on the T1-squared term.
+singles, whose two factors take disjoint labels so each carries its own dummies.
 """
 
 from fractions import Fraction
 
-import ccsd   # examples/ccsd.py, on sys.path via tests/conftest.py
+from deltapq import Problem, operators as op
 
 
 def _summary(terms):
@@ -25,7 +26,15 @@ def _summary(terms):
 
 def test_ccsd_energy_terms():
     """The CCSD energy problem collects to the three expected contributions."""
-    terms = ccsd.energy.derive()
+    # The two T1 factors of the quadratic term use disjoint index labels.
+    t1_squared = op.singles("t", "i", "a") * op.singles("t", "j", "b")
+    energy = Problem(
+        name="CCSD energy",
+        bra=op.reference(),
+        expr=op.H_N * (op.singles("t") + op.doubles("t") + Fraction(1, 2) * t1_squared),
+        ket=op.reference(),
+    )
+    terms = energy.derive()
     summary = _summary(terms)
 
     # Singles-Fock term with coefficient 1 (a single "t" of rank two, plus f).

@@ -9,8 +9,8 @@ It is a **general derivation engine, not a collection of methods.** The user
 states a problem in a small Python **input file** — an operator expression
 sandwiched between two determinants, `<bra| expr |ket>` — and the engine
 contracts, resolves, and collects it into the finished symbolic equation. MP2,
-CISD, and CCSD are **example input files** (`examples/*.py`) and regression
-scenarios, *not* shipped methods.
+CISD, and CCSD are **worked examples**, stated inline in the numbered method
+tests and used as regression scenarios, *not* shipped methods.
 
 The full pipeline is built and verified (kernel → policy → delta resolution →
 tensors → expression layer → canonicalization → `Problem` input interface),
@@ -284,7 +284,8 @@ Problem(
 - `Problem.derive()` returns collected `CanonicalTerm`s; `.report()` prints them.
 - The user does any **BCH / `exp(T)` expansion by hand** and hands the engine the
   resulting expression; `nested_commutator(H, T, T, ...)` transcribes
-  `[[H,T],T]`-style terms. See `examples/{mp2,cisd,ccsd}.py`.
+  `[[H,T],T]`-style terms. Worked problems are stated inline in
+  `deltapq/tests/test_007_MP2.py`, `test_008_CISD.py`, `test_009_CCSD.py`.
 
 ### Desirable future features (not built)
 - **User-defined custom operators.** Today a problem composes only the built-in
