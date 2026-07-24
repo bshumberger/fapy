@@ -9,16 +9,7 @@ occupied or virtual space purely from how it contracted.
 
 from deltapq import cre, ann
 from deltapq.resolve import resolve_groups
-
-
-def _by_membership(resolved, label):
-    """Return the (representative, space) that a given label resolved into.
-
-    Every resolved term maps each original label to its class representative and
-    each representative to a space, so this looks up where ``label`` landed.
-    """
-    rep = resolved.rep[label]
-    return rep, resolved.spaces[rep]
+from deltapq.tests.utils import membership as _by_membership
 
 
 def test_example_one_resolution_and_spaces():

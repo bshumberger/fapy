@@ -8,23 +8,9 @@ result we already trust. If any of these change, a physics bug or a sign error
 has crept in and must be understood before moving on.
 """
 
-from math import factorial
-
 from deltapq import cre, ann, contract_groups, format_terms
 from deltapq.contraction import recursive_generator
-
-
-def double_factorial(n):
-    """Return the double factorial n!! used to count perfect matchings.
-
-    A string of ``2m`` positions has ``(2m - 1)!!`` distinct perfect matchings,
-    which is the number of candidate full contractions the driver must consider.
-    """
-    result = 1
-    while n > 1:
-        result *= n
-        n -= 2
-    return result
+from deltapq.tests.utils import double_factorial
 
 
 # --- worked examples from the notebook ---------------------------------------

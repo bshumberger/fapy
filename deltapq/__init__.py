@@ -26,6 +26,8 @@ from .expression import (
     ExprTerm,
     commutator,
     nested_commutator,
+    relabel,
+    P,
     vev,
     project,
 )
@@ -65,6 +67,8 @@ __all__ = [
     "ExprTerm",
     "commutator",
     "nested_commutator",
+    "relabel",
+    "P",
     "vev",
     "project",
     "CanonicalTerm",

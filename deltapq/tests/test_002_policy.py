@@ -10,26 +10,14 @@ pairings are considered.
 from deltapq import cre, ann, wick_vev, format_terms, contract_all
 from deltapq.core import group_string
 from deltapq.policy import normal_ordered_blocks
-
-
-def _flatten(*groups):
-    """Combine several blocks into one tagged operator string.
-
-    This mirrors what ``contract_groups`` does internally: each block is stamped
-    with its own group index so a policy can later tell which operators shared a
-    normal-ordered block.
-    """
-    combined = []
-    for g_idx, g in enumerate(groups):
-        combined.extend(group_string(g, g_idx))
-    return combined
+from deltapq.tests.utils import flatten_blocks
 
 
 def test_normal_ordered_policy_reproduces_notebook_example():
     """Driving Stage 0's example through the explicit policy is unchanged."""
     # Same three blocks as the golden kernel test, but here we build the tagged
     # string ourselves and hand the policy to wick_vev directly.
-    ops = _flatten(
+    ops = flatten_blocks(
         [cre("i", "occ"), ann("a", "virt")],
         [cre("p", "gen"), ann("q", "gen")],
         [cre("b", "virt"), ann("j", "occ")],

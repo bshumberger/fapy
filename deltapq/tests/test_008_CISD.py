@@ -10,14 +10,7 @@ products vanish.
 from fractions import Fraction
 
 from deltapq import Problem, operators as op
-
-
-def _summary(terms):
-    """Summarize collected terms as {(coefficient, sorted tensor names)}."""
-    return {
-        (t.coefficient, tuple(sorted(x.name for x in t.tensors)))
-        for t in terms
-    }
+from deltapq.tests.utils import term_summary as _summary
 
 
 def test_cisd_energy_terms():

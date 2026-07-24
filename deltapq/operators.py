@@ -119,6 +119,45 @@ def doubles(name, i="i", j="j", a="a", b="b"):
     )
 
 
+# --- de-excitation operators (the adjoints, C-dagger / Lambda) ----------------
+
+# These are the Hermitian adjoints of the excitation operators: the daggered
+# operator strings, still carrying an amplitude. They are what a bra-side CI or
+# cluster operator (Ĉ†, Λ) is built from, so a full energy matrix element such as
+# <Phi_0| Ĉ2† Ĥ_N Ĉ2 |Phi_0> can be assembled as a product. Structurally they are
+# the bra_* manifolds with an amplitude tensor attached. When de-excitation and
+# excitation operators appear in the same sandwich, give them DISTINCT amplitude
+# names (e.g. "cd" and "c") so the collector keeps the two apart.
+
+def singles_dagger(name, i="i", a="a"):
+    """The single de-excitation operator sum_ia x_i^a {a_i^ a_a} carrying ``name``.
+
+    This is the adjoint of ``singles``: (a_a^ a_i)^dagger = a_i^ a_a, i.e. it
+    annihilates the particle in a and refills the hole in i. It carries no
+    internal symmetry, mirroring ``singles``.
+    """
+    return Expression.single(
+        block([cre(i, "occ"), ann(a, "virt")], Tensor(name, (i, a))),
+        Fraction(1),
+    )
+
+
+def doubles_dagger(name, i="i", j="j", a="a", b="b"):
+    """The double de-excitation operator (1/4) sum_ijab x_ij^ab {a_i^ a_j^ a_b a_a}.
+
+    This is the adjoint of ``doubles``: (a_a^ a_b^ a_j a_i)^dagger =
+    a_i^ a_j^ a_b a_a. The 1/4 prefactor and the doubles antisymmetry
+    (i<->j, a<->b) mirror ``doubles``.
+    """
+    return Expression.single(
+        block(
+            [cre(i, "occ"), cre(j, "occ"), ann(b, "virt"), ann(a, "virt")],
+            Tensor(name, (i, j, a, b), _DOUBLES_SYM),
+        ),
+        Fraction(1, 4),
+    )
+
+
 # --- projection manifolds (reference and excited determinants) ----------------
 
 def reference():
@@ -159,7 +198,7 @@ def ket_doubles(i="i", j="j", a="a", b="b"):
     )
 
 
-# --- orbital-rotation building blocks (expansion deferred) --------------------
+# --- orbital rotation operator ------------------------------------------------
 
 def E(p, q):
     """The spin-orbital excitation operator E_pq = a_p^ a_q (no tensor).
@@ -171,11 +210,29 @@ def E(p, q):
 
 
 def E_minus(p, q):
-    """The antisymmetric combination E_pq^- = a_p^ a_q - a_q^ a_p.
+    """The antisymmetric generator E_pq^- = a_p^ a_q - a_q^ a_p (no tensor).
 
     This is the elementary generator inside the orbital-rotation operator
-    ``kappa = sum_{p>q} kappa_pq E_pq^-``. Only this building block is provided;
-    assembling the full kappa sum (and supplying commutators with it as input) is
-    deferred, but nothing about the machinery needs to change to add it later.
+    ``kappa = sum_{p>q} kappa_pq E_pq^-``; ``kappa`` below dresses it with an
+    amplitude.
     """
     return E(p, q) - E(q, p)
+
+
+def kappa(name="kappa", p="p", q="q"):
+    """The orbital rotation operator kappa_pq (a_p^ a_q - a_q^ a_p).
+
+    Written in the explicit antisymmetric TWO-TERM form E_pq^- dressed with the
+    rotation amplitude kappa_pq: the antisymmetry lives in the two operator
+    strings themselves, not in a tensor annotation. Both terms carry the SAME
+    amplitude ``kappa_pq`` (the second with a minus sign), so this is exactly
+    kappa_pq E_pq^-. Summed over p > q it is the full orbital-rotation generator;
+    here a single (p, q) pair is returned and the caller supplies the labels.
+
+    It is used inside commutators for orbital response, e.g. [H_N, kappa].
+    """
+    amp = Tensor(name, (p, q))
+    return (
+        Expression.single(block([cre(p, "gen"), ann(q, "gen")], amp), Fraction(1))
+        - Expression.single(block([cre(q, "gen"), ann(p, "gen")], amp), Fraction(1))
+    )

@@ -23,7 +23,8 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import Tuple
 
-from .tensor import OperatorBlock, Term, contract_blocks
+from .core import Operator
+from .tensor import OperatorBlock, Tensor, Term, contract_blocks
 from .policy import normal_ordered_blocks
 
 
@@ -167,6 +168,52 @@ def nested_commutator(a: Expression, *rest: Expression) -> Expression:
     for b in rest:
         result = commutator(result, b)
     return result
+
+
+# --- permutation operators ----------------------------------------------------
+
+def relabel(expr: Expression, mapping) -> Expression:
+    """Return a copy of ``expr`` with index labels remapped by ``mapping``.
+
+    Every operator label and every tensor index in the expression is sent
+    through ``mapping`` (labels absent from it are unchanged). Since operators and
+    tensors are frozen, this rebuilds them. Used by the permutation operator to
+    form the swapped copy of an expression.
+    """
+    new_terms = []
+    for t in expr.terms:
+        new_blocks = []
+        for blk in t.blocks:
+            new_ops = tuple(
+                Operator(mapping.get(o.label, o.label), o.dagger, o.space, o.group)
+                for o in blk.ops
+            )
+            new_tensor = None
+            if blk.tensor is not None:
+                new_tensor = Tensor(
+                    blk.tensor.name,
+                    tuple(mapping.get(i, i) for i in blk.tensor.indices),
+                    blk.tensor.symmetry,
+                )
+            new_blocks.append(OperatorBlock(new_ops, new_tensor))
+        new_terms.append(ExprTerm(t.coefficient, tuple(new_blocks), t.policy))
+    return Expression(new_terms)
+
+
+def P(expr: Expression, pair) -> Expression:
+    """The antisymmetrizing permutation operator P(pq) = 1 - (p q).
+
+    ``P(expr, (p, q))`` returns ``expr`` minus the copy of ``expr`` with the two
+    labels p and q swapped, exactly the shorthand used to write amplitude
+    equations compactly (e.g. the CISD doubles residual). Because it takes and
+    returns an ``Expression``, the products used in the notes compose by nesting:
+    ``P(P(expr, (a, b)), (i, j))`` is P(ij)P(ab). This is the FORWARD expander
+    (it produces the explicit terms); recognizing P structure in a collected
+    result is a separate, future concern.
+    """
+    p, q = pair
+    swapped = relabel(expr, {p: q, q: p})
+    return expr - swapped
 
 
 # --- evaluation ---------------------------------------------------------------

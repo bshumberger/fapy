@@ -276,16 +276,35 @@ Problem(
 ).report()
 ```
 
-- `expr` is built from the operator library (`H_N`/`F_N`/`V_N`,
-  `singles(name)`/`doubles(name)`) and the expression algebra (`*`, `+`,
-  `commutator`, `nested_commutator`).
+- `expr` is built from the operator library and the expression algebra (`*`,
+  `+`, `commutator`, `nested_commutator`, `P`). The operator library has:
+  - `H_N`/`F_N`/`V_N` — the normal-ordered Hamiltonian;
+  - `singles(name)`/`doubles(name)` — excitation operators (CC `T`, CI `C`, ...);
+  - `singles_dagger(name)`/`doubles_dagger(name)` — the de-excitation adjoints
+    (`C†`, `Λ`), carrying amplitudes, for bra-side sandwiches such as
+    `<0| C2† H_N C2 |0>`. Give bra/ket amplitudes **distinct names** in a sandwich;
+  - `kappa(name, p, q)` — the orbital rotation operator, the explicit antisymmetric
+    two-term form `κ_pq(a_p^ a_q − a_q^ a_p)` (also `E`/`E_minus`), for
+    orbital-response commutators like `[H_N, κ]`;
+  - `P(expr, (p, q))` — the antisymmetrizing permutation operator `1 − (p q)`,
+    a forward expander (composes by nesting for `P(ij)P(ab)`).
 - `bra`/`ket` are projection manifolds; their labels are the **external**
   indices, inferred automatically (override via `externals=`).
 - `Problem.derive()` returns collected `CanonicalTerm`s; `.report()` prints them.
 - The user does any **BCH / `exp(T)` expansion by hand** and hands the engine the
   resulting expression; `nested_commutator(H, T, T, ...)` transcribes
-  `[[H,T],T]`-style terms. Worked problems are stated inline in
-  `deltapq/tests/test_007_MP2.py`, `test_008_CISD.py`, `test_009_CCSD.py`.
+  `[[H,T],T]`-style terms. Worked problems are stated inline in the numbered
+  method tests (`test_007_MP2.py` … `test_012_orbital_rotation.py`).
+- **Repeated operators need disjoint dummy labels** (auto-relabeling is a future
+  item): give each excitation/de-excitation instance its own indices.
+
+### Notes-grounded test cases
+`test_010_deexcitation.py` encodes the CID energy matrix elements
+(`CID_derivation/theory.tex`); `test_011_CISD_residual.py` the spin-orbital CISD
+singles/doubles residuals (Eqs. 25 & 27 from the handwritten notes) — the engine
+keeps the general `f_ov` (Brillouin) terms that Eq. 27 drops at canonical HF;
+`test_012_orbital_rotation.py` the orbital gradient `<0|[F_N, κ]|0>` (and
+`<0|[V_N, κ]|0>=0`).
 
 ### Desirable future features (not built)
 - **User-defined custom operators.** Today a problem composes only the built-in
