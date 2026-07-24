@@ -62,8 +62,31 @@ deltapq/
                      are stated inline as worked examples
 ```
 
+## Installation
+
+Install into your environment (editable, so source edits take effect immediately):
+
+```
+pip install -e .
+```
+
+After that, `import deltapq` works from any directory, so an input file can live
+anywhere:
+
+```
+python my_problem.py     # a script that builds a Problem and calls .report()
+```
+
 ## Running the tests
+
+From the repository:
 
 ```
 python -m pytest deltapq/tests
+```
+
+or, once installed, from anywhere:
+
+```
+python -m pytest --pyargs deltapq
 ```
