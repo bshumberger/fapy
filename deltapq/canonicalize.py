@@ -43,8 +43,9 @@ from .tensor import Tensor
 # may name an amplitude anything. The table still serves hand-built tensors (in
 # tests, say) that were created without an explicit symmetry.
 _SYMMETRY_GENERATORS = {
-    # Fock matrix f_pq is symmetric under p <-> q.
-    "f": [((1, 0), +1)],
+    # NOTE: the Fock matrix f_pq is intentionally absent. It is symmetric only for
+    # a real Fock matrix; for a complex Hermitian Fock (magnetic field, unrelaxed)
+    # f_pq =/= f_qp, so the contraction's index ordering must be preserved.
     # Antisymmetrized two-electron integral <pq||rs>: antisymmetric in p<->q and
     # in r<->s, symmetric under exchange of the bra and ket pairs (pq)<->(rs).
     "g": [((1, 0, 2, 3), -1), ((0, 1, 3, 2), -1), ((2, 3, 0, 1), +1)],

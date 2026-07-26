@@ -199,6 +199,19 @@ Canonicalize by applying the symmetry group, tracking sign flips from
 antisymmetric swaps, taking the lexicographically smallest form as a dict key,
 and summing coefficients. Do **not** attempt pairwise equivalence detection.
 
+**The Fock matrix `f_pq` carries NO index symmetry — intentionally.** `f_pq = f_qp`
+holds only for a *real* Fock matrix. For a **complex Hermitian** Fock (e.g. a
+finite-difference calculation with an explicit magnetic field, unrelaxed),
+`f_pq = f_qp^*` and the two orderings are *different numbers*, so the `p<->q`
+ordering the contraction produces must be preserved. The contraction already
+emits the physically correct order (e.g. `f_ab c_i^b`, `a` first); a symmetry
+annotation would canonicalize it to `f_ba` and silently corrupt the complex case.
+The antisymmetrized integral `<pq||rs>` has the same exposure (its antisymmetry is
+exact only for real orbitals); making all tensor symmetries **declarable per run**
+(real/symmetric vs complex/Hermitian) is the general fix — see the symmetry
+cleanup under Generality. Removed from both the `Tensor` annotation on `F_N`
+(`operators.py`) and the name-table fallback (`canonicalize.py`).
+
 ### First validation target
 ```
 E_corr = sum_ia f_ia t_i^a + (1/4) sum_ijab <ij||ab> t_ij^ab

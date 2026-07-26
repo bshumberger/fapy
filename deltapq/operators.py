@@ -42,9 +42,11 @@ from .expression import Expression
 # Each symmetry is a tuple of (permutation, sign) generators; the canonicalizer
 # closes them into the full group. Stamping these onto the tensors here means the
 # symmetry travels with the operator, so an amplitude may be named anything.
-
-# Fock matrix f_pq: symmetric under p <-> q.
-_FOCK_SYM = (((1, 0), +1),)
+#
+# The Fock matrix f_pq is deliberately given NO index symmetry. It is symmetric
+# only for a real Fock matrix; for a complex Hermitian Fock (e.g. an explicit
+# magnetic field, unrelaxed) f_pq = f_qp^* and the two orderings are different
+# numbers, so the p<->q ordering the contraction produces must be preserved.
 
 # Antisymmetrized integral <pq||rs>: antisymmetric in p<->q and r<->s, symmetric
 # under exchange of the pairs (pq) <-> (rs).
@@ -59,7 +61,7 @@ _DOUBLES_SYM = (((1, 0, 2, 3), -1), ((0, 1, 3, 2), -1))
 # F_N = sum_pq f_pq {a_p^ a_q}. The summation over p, q is implicit (Einstein
 # convention over the block's general indices); the tensor carries the labels.
 F_N = Expression.single(
-    block([cre("p", "gen"), ann("q", "gen")], Tensor("f", ("p", "q"), _FOCK_SYM)),
+    block([cre("p", "gen"), ann("q", "gen")], Tensor("f", ("p", "q"))),
     Fraction(1),
 )
 
