@@ -284,8 +284,8 @@ Problem(
     (`C†`, `Λ`), carrying amplitudes, for bra-side sandwiches such as
     `<0| C2† H_N C2 |0>`. Give bra/ket amplitudes **distinct names** in a sandwich;
   - `kappa(name, p, q)` — the orbital rotation operator, the explicit antisymmetric
-    two-term form `κ_pq(a_p^ a_q − a_q^ a_p)` (also `E`/`E_minus`), for
-    orbital-response commutators like `[H_N, κ]`;
+    two-term form `κ_pq(a_p^ a_q − a_q^ a_p)`, for orbital-response commutators
+    like `[H_N, κ]`;
   - `P(expr, (p, q))` — the antisymmetrizing permutation operator `1 − (p q)`,
     a forward expander (composes by nesting for `P(ij)P(ab)`).
 - `bra`/`ket` are projection manifolds; their labels are the **external**

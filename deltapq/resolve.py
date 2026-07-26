@@ -22,10 +22,6 @@ over occupied or virtual orbitals.
 from dataclasses import dataclass
 from typing import Optional
 
-from .core import group_string
-from .wick import wick_vev
-from .policy import normal_ordered_blocks
-
 
 @dataclass(frozen=True)
 class ResolvedTerm:
@@ -147,43 +143,3 @@ def resolve_terms(terms, declared=None):
     return resolved
 
 
-# --- end-to-end convenience ---------------------------------------------------
-
-def resolve_groups(*groups):
-    """Contract a set of normal-ordered blocks and resolve the result.
-
-    This mirrors ``contract_groups`` but carries the extra resolution step: it
-    stamps the blocks with group tags, runs the generalized-Wick driver, and
-    then spends the deltas so the caller gets resolved indices with spaces
-    instead of a raw delta list.
-    """
-    # Combine the blocks into one tagged string, remembering the declared spaces
-    # so resolution can prefer concrete indices as representatives.
-    combined = []
-    for g_idx, g in enumerate(groups):
-        combined.extend(group_string(g, g_idx))
-    declared = declared_spaces(combined)
-
-    terms = wick_vev(combined, policy=normal_ordered_blocks)
-    return resolve_terms(terms, declared)
-
-
-def format_resolved(resolved_terms):
-    """Pretty-print resolved terms as signed lists of ``rep:space`` classes.
-
-    Each surviving term prints its sign followed by one token per equivalence
-    class, written as the representative label tagged with the one-letter space
-    it resolved into (o = occupied, v = virtual). An empty list prints as "0".
-    """
-    if not resolved_terms:
-        return "0"
-    tag = {"occ": "o", "virt": "v"}
-    parts = []
-    for t in resolved_terms:
-        s = "+" if t.sign > 0 else "-"
-        # Sort classes by representative label for a stable, readable rendering.
-        classes = " ".join(
-            f"{r}:{tag[t.spaces[r]]}" for r in sorted(t.spaces)
-        )
-        parts.append(f"{s} {classes}")
-    return " ".join(parts).lstrip("+ ").strip()

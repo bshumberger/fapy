@@ -47,8 +47,8 @@ class Expression:
     """A sum of ``ExprTerm``s supporting +, -, scalar and operator products.
 
     Building an expression never contracts anything; it only accumulates the
-    triples. Call ``vev`` (or ``project``) to actually evaluate a vacuum
-    expectation value once the expression is assembled.
+    triples. Call ``vev`` to actually evaluate a vacuum expectation value once the
+    expression is assembled.
     """
 
     def __init__(self, terms):
@@ -237,13 +237,3 @@ def vev(expr: Expression):
                 )
             )
     return out
-
-
-def project(bra: Expression, expr: Expression):
-    """Evaluate a projection <bra| expr |Phi_0> by prepending the bra manifold.
-
-    A bra determinant contributes its own operator block to the LEFT of the
-    expression, so the projection is nothing more than the vacuum expectation
-    value of ``bra * expr``.
-    """
-    return vev(bra * expr)

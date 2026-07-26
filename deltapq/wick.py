@@ -14,9 +14,8 @@ each other. Only fully contracted terms survive <Phi_0| ... |Phi_0>, so this
 computes the full contraction (VEV) over all such inter-group matchings.
 """
 
-from .core import group_string
 from .contraction import contraction, recursive_generator, fermion_sign
-from .policy import normal_ordered_blocks, contract_all
+from .policy import normal_ordered_blocks
 
 
 # --- driver -------------------------------------------------------------------
@@ -83,36 +82,3 @@ def wick_vev(ops, policy=normal_ordered_blocks):
     return terms
 
 
-def contract_groups(*groups):
-    """
-    This function takes the groups and combines them into one string for wick_vev to be run on.
-    """
-    # Create a list.
-    combined = []
-
-    # Loop through the indices (g_idx) and values (g) of the groups.
-    for g_idx, g in enumerate(groups):
-        # Build the groups and add group labels to the operators using the "group_string" function.
-        combined.extend(group_string(g, g_idx))
-
-    # Run wick_vev on the operator string. Because the operators now carry their
-    # block tags, the default normal_ordered_blocks policy reproduces the
-    # generalized Wick theorem (no contractions within a single block).
-    return wick_vev(combined, policy=normal_ordered_blocks)
-
-
-def format_terms(terms):
-    """Pretty-print a list of contracted terms as a signed string of deltas.
-
-    Each term becomes a leading sign followed by its Kronecker deltas; the whole
-    thing is joined into one line. An empty list of terms prints as "0" since a
-    string with no surviving full contraction has zero vacuum expectation value.
-    """
-    if not terms:
-        return "0"
-    parts = []
-    for t in terms:
-        s = "+" if t["sign"] > 0 else "-"
-        d = " ".join(f"d({la},{lb})" for (la, lb, _sp) in t["deltas"])
-        parts.append(f"{s} {d}")
-    return " ".join(parts).lstrip("+ ").strip()

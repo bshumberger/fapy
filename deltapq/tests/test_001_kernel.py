@@ -8,9 +8,9 @@ result we already trust. If any of these change, a physics bug or a sign error
 has crept in and must be understood before moving on.
 """
 
-from deltapq import cre, ann, contract_groups, format_terms
+from deltapq import cre, ann
 from deltapq.contraction import recursive_generator
-from deltapq.tests.utils import double_factorial
+from deltapq.tests.utils import contract_groups, format_terms, double_factorial
 
 
 # --- worked examples from the notebook ---------------------------------------

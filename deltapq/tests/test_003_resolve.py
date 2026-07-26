@@ -8,8 +8,7 @@ occupied or virtual space purely from how it contracted.
 """
 
 from deltapq import cre, ann
-from deltapq.resolve import resolve_groups
-from deltapq.tests.utils import membership as _by_membership
+from deltapq.tests.utils import resolve_groups, membership as _by_membership
 
 
 def test_example_one_resolution_and_spaces():

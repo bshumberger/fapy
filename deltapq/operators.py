@@ -24,10 +24,10 @@ single definition serves every method. The projection manifolds ``bra_*`` /
 ``ket_*`` are the excited determinants a method projects onto; they carry no
 tensor of their own.
 
-The orbital-rotation pieces ``E`` and ``E_minus`` are provided so that
-orbital-response commutators can be written down; the full ``kappa`` operator is
-a sum over p > q of ``kappa_pq E_pq^-`` whose expansion is deferred -- only the
-building blocks exist here.
+The orbital-rotation operator ``kappa`` is the explicit antisymmetric generator
+``kappa_pq (a_p^ a_q - a_q^ a_p)``, used inside orbital-response commutators such
+as ``[H_N, kappa]``. Summed over p > q it is the full rotation generator; a single
+(p, q) pair is returned and the caller supplies the labels.
 """
 
 from fractions import Fraction
@@ -199,25 +199,6 @@ def ket_doubles(i="i", j="j", a="a", b="b"):
 
 
 # --- orbital rotation operator ------------------------------------------------
-
-def E(p, q):
-    """The spin-orbital excitation operator E_pq = a_p^ a_q (no tensor).
-
-    In the spin-orbital formulation this is simply a creator-annihilator pair on
-    general indices; the spin-adapted singlet generator is out of scope.
-    """
-    return Expression.single(block([cre(p, "gen"), ann(q, "gen")]), Fraction(1))
-
-
-def E_minus(p, q):
-    """The antisymmetric generator E_pq^- = a_p^ a_q - a_q^ a_p (no tensor).
-
-    This is the elementary generator inside the orbital-rotation operator
-    ``kappa = sum_{p>q} kappa_pq E_pq^-``; ``kappa`` below dresses it with an
-    amplitude.
-    """
-    return E(p, q) - E(q, p)
-
 
 def kappa(name="kappa", p="p", q="q"):
     """The orbital rotation operator kappa_pq (a_p^ a_q - a_q^ a_p).

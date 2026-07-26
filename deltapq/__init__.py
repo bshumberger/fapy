@@ -11,14 +11,12 @@ the handful of names most commonly reached for when building a string by hand.
 from .core import Space, Operator, cre, ann, group_string
 from .contraction import contraction, recursive_generator, fermion_sign
 from .policy import ContractionPolicy, normal_ordered_blocks, contract_all
-from .wick import wick_vev, contract_groups, format_terms
+from .wick import wick_vev
 from .resolve import (
     ResolvedTerm,
     declared_spaces,
     resolve_term,
     resolve_terms,
-    resolve_groups,
-    format_resolved,
 )
 from .tensor import Tensor, OperatorBlock, Term, contract_blocks, block
 from .expression import (
@@ -29,7 +27,6 @@ from .expression import (
     relabel,
     P,
     vev,
-    project,
 )
 from .canonicalize import CanonicalTerm, canonicalize, canonical_tensor, format_canonical
 from .problem import Problem
@@ -50,14 +47,10 @@ __all__ = [
     "normal_ordered_blocks",
     "contract_all",
     "wick_vev",
-    "contract_groups",
-    "format_terms",
     "ResolvedTerm",
     "declared_spaces",
     "resolve_term",
     "resolve_terms",
-    "resolve_groups",
-    "format_resolved",
     "Tensor",
     "OperatorBlock",
     "Term",
@@ -70,7 +63,6 @@ __all__ = [
     "relabel",
     "P",
     "vev",
-    "project",
     "CanonicalTerm",
     "canonicalize",
     "canonical_tensor",

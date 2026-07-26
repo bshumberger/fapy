@@ -9,7 +9,7 @@ reversed annihilator ordering demanded by the notes.
 
 from fractions import Fraction
 
-from deltapq.expression import Expression, commutator, nested_commutator, project, vev
+from deltapq.expression import Expression, commutator, nested_commutator, vev
 from deltapq import operators as ops
 
 
@@ -63,8 +63,9 @@ def test_singles_projection_of_fock():
     # This is the singly-projected Fock matrix element. By hand the only
     # surviving contraction pairs a_i^ with the Fock annihilator (hole line) and
     # a_a with the Fock creator (particle line), giving + f with the general
-    # indices resolved onto a (virtual) and i (occupied).
-    terms = project(ops.bra_singles("i", "a"), ops.F_N)
+    # indices resolved onto a (virtual) and i (occupied). Projecting onto the
+    # excited bra is just the VEV of bra times the operator.
+    terms = vev(ops.bra_singles("i", "a") * ops.F_N)
 
     assert len(terms) == 1
     term = terms[0]
