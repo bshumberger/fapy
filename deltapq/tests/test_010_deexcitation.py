@@ -20,7 +20,7 @@ keeps the two apart; the two operators are given DISJOINT dummy labels.
 
 from fractions import Fraction
 
-from deltapq import vev, canonicalize, operator_library as op
+from deltapq import canonicalize, operator_library as op
 from deltapq.tests.utils import term_multiset
 
 
@@ -36,19 +36,19 @@ def _c():
 
 def test_v_n_c2_is_quarter_integral_amplitude():
     """<0| V_N C2 |0> = 1/4 <ij||ab> c_ij^ab (one term)."""
-    terms = canonicalize(vev(op.V_N * _c()))
+    terms = canonicalize((op.V_N * _c()).vev())
     assert term_multiset(terms) == {(Fraction(1, 4), ("c", "g")): 1}
 
 
 def test_c2dagger_v_n_is_quarter_integral_amplitude():
     """<0| C2d V_N |0> = 1/4 <ab||ij> c_ij^ab(dagger) (one term)."""
-    terms = canonicalize(vev(_cd() * op.V_N))
+    terms = canonicalize((_cd() * op.V_N).vev())
     assert term_multiset(terms) == {(Fraction(1, 4), ("cd", "g")): 1}
 
 
 def test_c2dagger_f_n_c2_two_terms_occ_and_virt():
     """<0| C2d F_N C2 |0> = -1/2 f_ij ... + 1/2 f_ab ... (occ and virt blocks)."""
-    terms = canonicalize(vev(_cd() * op.F_N * _c()))
+    terms = canonicalize((_cd() * op.F_N * _c()).vev())
 
     # Two terms of magnitude 1/2, each a product of both amplitudes and one Fock.
     assert term_multiset(terms) == {
@@ -69,7 +69,7 @@ def test_c2dagger_f_n_c2_two_terms_occ_and_virt():
 
 def test_c2dagger_v_n_c2_three_terms_ladders_and_ring():
     """<0| C2d V_N C2 |0> = 1/8 <ij||kl> + 1/8 <ab||cd> + <ia||bj> pieces."""
-    terms = canonicalize(vev(_cd() * op.V_N * _c()))
+    terms = canonicalize((_cd() * op.V_N * _c()).vev())
 
     # Three terms: two 1/8 ladders and one ring of magnitude 1. (The ring prints
     # as -<ia||jb>, which equals +<ia||bj> by the integral antisymmetry.)

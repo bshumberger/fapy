@@ -256,11 +256,6 @@ features to build now.
    → `Term.tensors` must be a **list**, never fixed `amplitude`/`integral`
    slots.
 
-4. **Permutation operators as first-class objects.** `P_ij^ab`,
-   `P_ijk^abc`, `P^TCME_aibj` (Hald Eqs. 54, 58, 59) compactly encode sums of
-   terms. Represent symbolically rather than always expanding, or expression
-   size explodes.
-
 ### Explicitly out of scope for now
 **Spin adaptation.** Hald works closed-shell spin-adapted (`E_pq`,
 `L_pqrs = 2g_pqrs - g_psrq`); `main.pdf` is spin-orbital. These are different
@@ -290,7 +285,7 @@ Problem(
 ```
 
 - `expr` is built from the operator library and the expression algebra (`*`,
-  `+`, `commutator`, `left_nested_commutator`, `right_nested_commutator`, `P`).
+  `+`, `commutator`, `left_nested_commutator`, `right_nested_commutator`).
   The operator library has:
   - `H_N`/`F_N`/`V_N` — the normal-ordered Hamiltonian;
   - `singles(name)`/`doubles(name)` — excitation operators (CC `T`, CI `C`, ...);
@@ -300,8 +295,6 @@ Problem(
   - `kappa(name, p, q)` — the orbital rotation operator, the explicit antisymmetric
     two-term form `κ_pq(a_p^ a_q − a_q^ a_p)`, for orbital-response commutators
     like `[H_N, κ]`;
-  - `P(expr, (p, q))` — the antisymmetrizing permutation operator `1 − (p q)`,
-    a forward expander (composes by nesting for `P(ij)P(ab)`).
 - `bra`/`ket` are projection manifolds; their labels are the **external**
   indices, inferred automatically (override via `externals=`).
 - `Problem.derive()` returns collected `CanonicalTerm`s; `.report()` prints them.

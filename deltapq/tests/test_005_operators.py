@@ -14,7 +14,6 @@ from deltapq.expression import (
     commutator,
     left_nested_commutator,
     right_nested_commutator,
-    vev,
 )
 from deltapq import Problem, canonicalize, operator_library as ops
 
@@ -98,7 +97,7 @@ def test_jacobi_identity_vanishes():
         - commutator(b, commutator(a, c))
         - commutator(commutator(a, b), c)
     )
-    assert canonicalize(vev(jacobi)) == []
+    assert canonicalize(jacobi.vev()) == []
 
 
 def test_commutator_as_a_problem_expression():
@@ -128,7 +127,7 @@ def test_singles_projection_of_fock():
     # a_a with the Fock creator (particle line), giving + f with the general
     # indices resolved onto a (virtual) and i (occupied). Projecting onto the
     # excited bra is just the VEV of bra times the operator.
-    terms = vev(ops.bra_singles("i", "a") * ops.F_N)
+    terms = (ops.bra_singles("i", "a") * ops.F_N).vev()
 
     assert len(terms) == 1
     term = terms[0]
@@ -149,7 +148,7 @@ def test_v_n_with_t2_is_nonzero_and_carries_both_tensors():
     integral g and the amplitude t2, with the clean value deferred to the method
     stage (which needs canonicalization).
     """
-    terms = vev(ops.V_N * ops.doubles("t2"))
+    terms = (ops.V_N * ops.doubles("t2")).vev()
 
     assert len(terms) > 0
     for term in terms:

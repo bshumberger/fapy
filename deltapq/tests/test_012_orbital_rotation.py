@@ -14,7 +14,7 @@ the fluctuation potential contributes nothing.
 
 from fractions import Fraction
 
-from deltapq import vev, canonicalize, commutator, operator_library as op
+from deltapq import canonicalize, commutator, operator_library as op
 from deltapq.tests.utils import term_multiset
 
 
@@ -39,7 +39,7 @@ def test_kappa_is_two_antisymmetric_terms():
 
 def test_fock_commutator_is_the_orbital_gradient():
     """<0|[F_N, kappa]|0> = -f_ia kap_ia + f_ia kap_ai (the orbital gradient)."""
-    terms = canonicalize(vev(commutator(op.F_N, op.kappa("kap", "p", "q"))))
+    terms = canonicalize(commutator(op.F_N, op.kappa("kap", "p", "q")).vev())
 
     # Two terms, each an occupied-virtual Fock times the rotation amplitude.
     assert term_multiset(terms) == {
@@ -54,5 +54,5 @@ def test_fock_commutator_is_the_orbital_gradient():
 
 def test_potential_commutator_vanishes():
     """<0|[V_N, kappa]|0> = 0: the fluctuation potential is not in the gradient."""
-    terms = canonicalize(vev(commutator(op.V_N, op.kappa("kap", "p", "q"))))
+    terms = canonicalize(commutator(op.V_N, op.kappa("kap", "p", "q")).vev())
     assert terms == []

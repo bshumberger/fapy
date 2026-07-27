@@ -30,7 +30,7 @@ the bra and ket manifolds, so the user never has to list them by hand.
 
 from dataclasses import dataclass, field
 
-from .expression import Expression, vev
+from .expression import Expression
 from .canonicalize import canonicalize, format_canonical
 
 
@@ -85,7 +85,7 @@ class Problem:
         unit, so a plain energy needs no special handling), and the raw terms are
         then canonicalized with the external indices held fixed.
         """
-        raw = vev(self.bra * self.expr * self.ket)
+        raw = (self.bra * self.expr * self.ket).vev()
         return canonicalize(raw, externals=self.external_indices())
 
     def report(self, stream=None):

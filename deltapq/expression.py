@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import Tuple
 
-from .operators import Operator, OperatorBlock, Integral
+from .operators import OperatorBlock
 from .wick import contract_blocks, Term
 from .policy import normal_ordered_blocks
 
@@ -40,7 +40,7 @@ class Expression:
     Notes
     -----
     Building an expression never contracts anything; it only accumulates terms.
-    Call ``vev`` to evaluate a vacuum expectation value once it is assembled.
+    Call ``.vev()`` to evaluate a vacuum expectation value once it is assembled.
     """
 
     def __init__(self, terms):
@@ -167,6 +167,30 @@ class Expression:
     def __repr__(self):
         return f"Expression({len(self.terms)} terms)"
 
+    # --- evaluation -----------------------------------------------------------
+
+    def vev(self):
+        """Evaluate the Fermi-vacuum expectation value <Phi_0| self |Phi_0>.
+
+        Returns
+        -------
+        list of Term
+            The raw, uncollected terms: each expression term is contracted by the
+            kernel and its coefficient multiplies the fermionic sign. Combining and
+            canonicalizing them is a later stage.
+        """
+        out = []
+        for t in self.terms:
+            for term in contract_blocks(*t.blocks, policy=t.policy):
+                out.append(
+                    Term(
+                        coefficient=t.coefficient * term.coefficient,
+                        integrals=term.integrals,
+                        index_spaces=term.index_spaces,
+                    )
+                )
+        return out
+
 
 # --- commutators --------------------------------------------------------------
 
@@ -253,103 +277,3 @@ def right_nested_commutator(a: Expression, *rest: Expression) -> Expression:
     if not rest:
         return a
     return commutator(a, right_nested_commutator(*rest))
-
-
-# --- permutation operators ----------------------------------------------------
-
-def relabel(expr: Expression, mapping) -> Expression:
-    """Return a copy of ``expr`` with index labels remapped by ``mapping``.
-
-    Parameters
-    ----------
-    expr : Expression
-        The expression to relabel.
-    mapping : dict
-        Maps each label to its replacement; labels absent from it are unchanged.
-
-    Returns
-    -------
-    Expression
-
-    Notes
-    -----
-    Every operator label and every factor index is sent through ``mapping``. Since
-    operators and factors are frozen, this rebuilds them. Used by the permutation
-    operator to form the swapped copy of an expression.
-    """
-    new_terms = []
-    for t in expr.terms:
-        new_blocks = []
-        for blk in t.blocks:
-            new_ops = tuple(
-                Operator(mapping.get(o.label, o.label), o.dagger, o.space, o.group)
-                for o in blk.ops
-            )
-            new_integral = None
-            if blk.integral is not None:
-                new_integral = Integral(
-                    blk.integral.name,
-                    tuple(mapping.get(i, i) for i in blk.integral.indices),
-                    blk.integral.symmetry,
-                )
-            new_blocks.append(OperatorBlock(new_ops, new_integral))
-        new_terms.append(ExprTerm(t.coefficient, tuple(new_blocks), t.policy))
-    return Expression(new_terms)
-
-
-def P(expr: Expression, pair) -> Expression:
-    """The antisymmetrizing permutation operator P(pq) = 1 - (p q).
-
-    Parameters
-    ----------
-    expr : Expression
-        The expression to antisymmetrize.
-    pair : tuple of str
-        The two labels (p, q) to swap.
-
-    Returns
-    -------
-    Expression
-        ``expr`` minus its copy with p and q swapped.
-
-    Notes
-    -----
-    This is the shorthand used to write amplitude equations compactly (e.g. the
-    CISD doubles residual). Because it takes and returns an ``Expression``, the
-    products in the notes compose by nesting: ``P(P(expr, (a, b)), (i, j))`` is
-    P(ij)P(ab). It is the FORWARD expander (it produces the explicit terms);
-    recognizing P structure in a collected result is a separate, future concern.
-    """
-    p, q = pair
-    swapped = relabel(expr, {p: q, q: p})
-    return expr - swapped
-
-
-# --- evaluation ---------------------------------------------------------------
-
-def vev(expr: Expression):
-    """Evaluate the Fermi-vacuum expectation value <Phi_0| expr |Phi_0>.
-
-    Parameters
-    ----------
-    expr : Expression
-        The assembled expression.
-
-    Returns
-    -------
-    list of Term
-        The raw, uncollected terms: each expression term is contracted by the
-        kernel and its coefficient multiplies the fermionic sign. Combining and
-        canonicalizing them is a later stage.
-    """
-    out = []
-    for t in expr.terms:
-        for term in contract_blocks(*t.blocks, policy=t.policy):
-            out.append(
-                Term(
-                    coefficient=t.coefficient * term.coefficient,
-                    integrals=term.integrals,
-                    index_spaces=term.index_spaces,
-                )
-            )
-    return out

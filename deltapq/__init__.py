@@ -33,9 +33,6 @@ from .expression import (
     commutator,
     left_nested_commutator,
     right_nested_commutator,
-    relabel,
-    P,
-    vev,
 )
 from .canonicalize import CanonicalTerm, canonicalize, canonical_tensor, format_canonical
 from .problem import Problem
@@ -70,9 +67,6 @@ __all__ = [
     "commutator",
     "left_nested_commutator",
     "right_nested_commutator",
-    "relabel",
-    "P",
-    "vev",
     "CanonicalTerm",
     "canonicalize",
     "canonical_tensor",
