@@ -222,21 +222,33 @@ def left_nested_commutator(a: Expression, *rest: Expression) -> Expression:
 
 
 def right_nested_commutator(a: Expression, *rest: Expression) -> Expression:
-    """The right-nested commutator [A, [B1, [ ..., [Bn-1, Bn] ]]].
+    """The right-nested commutator [An, [ ..., [A2, [A1, B]] ]].
+
+    A sequence of operators An, ..., A1 is nested onto an innermost base B. The
+    operators are given left to right exactly as the bracket reads: the outermost
+    operator first, then each next one one level deeper, ending with the base B.
+    So ``right_nested_commutator(An, ..., A2, A1, B)`` builds
+    [An, [ ..., [A2, [A1, B]] ]].
 
     Parameters
     ----------
     a : Expression
-        The outermost-left operator.
+        The outermost operator, An.
     *rest : Expression
-        Operators nested to the right, in order.
+        The remaining operators inward, ending with the innermost base B.
 
     Returns
     -------
     Expression
-        ``a`` unchanged when no ``rest`` is given. This is the mirror of
-        ``left_nested_commutator``: with fewer than two ``rest`` operators the two
-        agree, and they differ only in how three or more operators nest.
+        ``a`` unchanged when no ``rest`` is given.
+
+    Notes
+    -----
+    Like ``left_nested_commutator`` the operators appear in argument order left to
+    right; the two differ only in nesting direction (left folds as [[...], b],
+    right nests as [a, [...]]). For example
+    ``right_nested_commutator(E_pq, E_rs_minus, H)`` is [E_pq, [E_rs_minus, H]] --
+    the electronic (orbital) Hessian commutator, Helgaker eq. (10.2.8).
     """
     if not rest:
         return a

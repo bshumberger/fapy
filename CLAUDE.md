@@ -365,4 +365,57 @@ keeps the general `f_ov` (Brillouin) terms that Eq. 27 drops at canonical HF;
 - Prefer explicit declarations over inference (spaces, symmetries, policies).
 - Every stage should have a hand-checkable test before moving on. Debugging a
   sign error in a 30-term expression against a textbook is miserable.
-- Cite `main.pdf` equation numbers in comments when encoding physics rules.
+- Cite reference equation numbers in comments when encoding physics rules
+  (`main.pdf`/`theory.tex`, and the textbooks — e.g. Helgaker "Molecular
+  Electronic Structure Theory", eq. numbers like 10.2.5).
+
+### Docstring / comment formatting (current preference — supersedes any older note)
+Model on the sibling **`apyib`** package. This replaces the earlier
+"verbose notebook-style narration" preference.
+- **Module docstring:** one terse line, `"""Contains ..."""`.
+- **NumPy style**, not Google: `Parameters` / `Returns` / `Notes` / `Attributes`
+  sections under `----------` underlines. Not `Args:` / `Attributes:`.
+- **Classes:** brief lead line + `Attributes` / `Notes` sections.
+- **Functions:** `Parameters` / `Returns` / `Notes`.
+- **Dunder methods** (`__mul__`, `__add__`, ...): no docstring; keep a short inline
+  comment where the logic is non-obvious.
+- Comments are **purposeful, not line-by-line narration**. No Sphinx roles
+  (`:func:`, `:class:`, `#:`) — plain prose.
+- `snake_case` functions, `PascalCase` classes (standard Python).
+
+### Naming
+- Names should be **descriptive and convey the physics**. Renames made this way:
+  `Tensor -> Integral` (integral/amplitude factor), `substitute -> relabel_indices`,
+  `nested_commutator -> left_nested_commutator` (+ `right_nested_commutator`),
+  the library module `-> operator_library`.
+- **Argument order should match the natural reading** of what's being built --
+  e.g. `right_nested_commutator(A, B, C)` reads left-to-right as the bracket
+  `[A, [B, C]]`.
+- Rename **consistently** (class, fields, params, keyword args, tests, docs all
+  together, e.g. `.tensors -> .integrals`).
+- **Type annotations must be honest** (`Term.coefficient: Fraction`, not `int`).
+- **Physics correctness over convenience**: don't bake in real/symmetric
+  assumptions (the Fock matrix carries *no* index symmetry so complex Hermitian
+  cases stay correct); preserve index ordering where it is physical.
+
+## Working with the user (collaboration notes)
+How the user analyzes, questions, and moves through the code — keep these in mind:
+- **One module at a time, in flow/build order.** Understand and (re)style each file
+  before moving on. The build-phase order is `operators -> expression ->
+  operator_library`; then the evaluation side.
+- **Expect many "what does this do / how does it work" questions** about specific
+  functions, classes, and plain Python syntax (`Tuple[X, ...]`, `@classmethod`,
+  `*rest`, `dict.get(k, k)`). Answer precisely and **correct loose terminology**
+  (e.g. recursive *function* vs recursive *generator*; "fields" not "blocks").
+- **Review before commit.** Present the change, iterate on critique, and **commit
+  only when explicitly asked**. "Give it a shot and I'll critique" is the norm.
+- **Make only the change requested; do not over-reach.** Surface adjacent issues as
+  a note or offer, not a silent edit.
+- **"Fix later" items go into this file** (e.g. the mixed-policy conflict), not
+  fixed on the spot, when the user says so.
+- **Ground decisions in references.** When a structure/convention appears in the
+  author's notes or a textbook, match it exactly (transcribe and confirm).
+- **Keep the package lean** — remove dead/extraneous code; flag test gaps and want
+  fundamental operations unit-tested.
+- **Environment:** work/tests run in the `deltapq` conda env
+  (`~/miniconda3/envs/deltapq/bin/python`), not `apyib`.

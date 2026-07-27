@@ -1,16 +1,22 @@
 """
 Tests for the expression layer and the operator library.
 
-These check three things: that a commutator really expands to A*B - B*A at the
-expression layer, that a simple projection gives the hand-derivable one-electron
-matrix element, and that the operator strings are wired up with the correct
-reversed annihilator ordering demanded by the notes.
+These cover the commutator algebra (plain, left- and right-nested, the Jacobi
+identity, and a commutator used as a Problem's operator expression), a simple
+projection that gives a hand-derivable one-electron matrix element, and the
+reversed annihilator ordering the operator strings must use.
 """
 
 from fractions import Fraction
 
-from deltapq.expression import Expression, commutator, left_nested_commutator, vev
-from deltapq import operator_library as ops
+from deltapq.expression import (
+    Expression,
+    commutator,
+    left_nested_commutator,
+    right_nested_commutator,
+    vev,
+)
+from deltapq import Problem, canonicalize, operator_library as ops
 
 
 # --- expression layer ---------------------------------------------------------
@@ -54,6 +60,63 @@ def test_left_nested_commutator_folds_from_the_left():
     assert signature(folded) == signature(manual)
     # A bare nest with no further operators is just the operator itself.
     assert signature(left_nested_commutator(a)) == signature(a)
+
+
+def test_right_nested_commutator_folds_from_the_right():
+    """right_nested_commutator(A, B, C) equals commutator(A, commutator(B, C))."""
+    # Operators appear in argument order: A is outermost and the nest descends to
+    # the right, giving [A, [B, C]].
+    a = ops.F_N
+    b = ops.doubles("t", "i", "j", "a", "b")
+    c = ops.doubles("t", "k", "l", "c", "d")
+
+    folded = right_nested_commutator(a, b, c)
+    manual = commutator(a, commutator(b, c))
+
+    def signature(expr):
+        return sorted((str(t.coefficient), repr(t.blocks)) for t in expr.terms)
+
+    assert signature(folded) == signature(manual)
+    # A bare nest with no further operators is just the operator itself.
+    assert signature(right_nested_commutator(a)) == signature(a)
+
+
+def test_jacobi_identity_vanishes():
+    """The Jacobi identity [A,[B,C]] - [B,[A,C]] - [[A,B],C] = 0.
+
+    This is Helgaker eq. (10.2.5) -- the identity behind the symmetry of the
+    electronic (orbital) Hessian. It exercises the commutator algebra including a
+    right-nested commutator, and once contracted and collected it must vanish
+    completely.
+    """
+    a = ops.F_N
+    b = ops.kappa("x", "p", "q")
+    c = ops.kappa("y", "r", "s")
+
+    jacobi = (
+        commutator(a, commutator(b, c))
+        - commutator(b, commutator(a, c))
+        - commutator(commutator(a, b), c)
+    )
+    assert canonicalize(vev(jacobi)) == []
+
+
+def test_commutator_as_a_problem_expression():
+    """A commutator can be the expr of a Problem: <0|[H_N, kappa]|0> is the gradient."""
+    # The orbital gradient -f_ia kappa_ia + f_ai kappa_ai, evaluated through the
+    # Problem path rather than by calling vev directly.
+    sigma = Problem(
+        name="orbital gradient",
+        bra=ops.reference(),
+        expr=commutator(ops.H_N, ops.kappa("k", "p", "q")),
+        ket=ops.reference(),
+    ).derive()
+
+    summary = {
+        (t.coefficient, tuple(sorted(x.name for x in t.integrals))) for t in sigma
+    }
+    assert summary == {(Fraction(1), ("f", "k")), (Fraction(-1), ("f", "k"))}
+    assert len(sigma) == 2
 
 
 # --- a hand-checkable projection ----------------------------------------------
