@@ -20,7 +20,7 @@ nonzero; the policy only prunes structurally forbidden pairings first.
 
 from typing import Callable
 
-from .core import Operator
+from .operators import Operator
 
 # A contraction policy is a callable on the left/right operators of a candidate
 # pair. Naming the type keeps the driver signature readable and documents intent.

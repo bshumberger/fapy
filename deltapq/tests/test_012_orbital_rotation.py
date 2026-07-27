@@ -14,7 +14,7 @@ the fluctuation potential contributes nothing.
 
 from fractions import Fraction
 
-from deltapq import vev, canonicalize, commutator, operators as op
+from deltapq import vev, canonicalize, commutator, operator_library as op
 from deltapq.tests.utils import term_multiset
 
 
@@ -33,8 +33,8 @@ def test_kappa_is_two_antisymmetric_terms():
     (minus_block,) = minus.blocks
     assert [(o.label, o.dagger) for o in plus_block.ops] == [("p", True), ("q", False)]
     assert [(o.label, o.dagger) for o in minus_block.ops] == [("q", True), ("p", False)]
-    assert plus_block.tensor.name == "kap" and plus_block.tensor.indices == ("p", "q")
-    assert minus_block.tensor.name == "kap" and minus_block.tensor.indices == ("p", "q")
+    assert plus_block.integral.name == "kap" and plus_block.integral.indices == ("p", "q")
+    assert minus_block.integral.name == "kap" and minus_block.integral.indices == ("p", "q")
 
 
 def test_fock_commutator_is_the_orbital_gradient():
@@ -48,7 +48,7 @@ def test_fock_commutator_is_the_orbital_gradient():
     }
     # Every surviving index is one occupied and one virtual (the f_ov block).
     for t in terms:
-        (fock,) = [x for x in t.tensors if x.name == "f"]
+        (fock,) = [x for x in t.integrals if x.name == "f"]
         assert {t.index_spaces[i] for i in fock.indices} == {"occ", "virt"}
 
 

@@ -9,7 +9,7 @@ products vanish.
 
 from fractions import Fraction
 
-from deltapq import Problem, operators as op
+from deltapq import Problem, operator_library as op
 from deltapq.tests.utils import term_summary as _summary
 
 

@@ -8,7 +8,7 @@ as a list of scenarios and their assertions.
 
 from collections import Counter
 
-from deltapq.core import group_string
+from deltapq.operators import group_string
 from deltapq.wick import wick_vev
 from deltapq.policy import normal_ordered_blocks
 from deltapq.resolve import declared_spaces, resolve_terms
@@ -102,7 +102,7 @@ def term_summary(terms):
     contains identifies simple energy expressions unambiguously.
     """
     return {
-        (t.coefficient, tuple(sorted(x.name for x in t.tensors)))
+        (t.coefficient, tuple(sorted(x.name for x in t.integrals)))
         for t in terms
     }
 
@@ -114,6 +114,6 @@ def term_multiset(terms):
     the same coefficient and tensor-name signature.
     """
     return Counter(
-        (t.coefficient, tuple(sorted(x.name for x in t.tensors)))
+        (t.coefficient, tuple(sorted(x.name for x in t.integrals)))
         for t in terms
     )

@@ -19,7 +19,7 @@ implementation detail.
 
 from typing import Optional
 
-from .core import Operator
+from .operators import Operator
 
 
 # --- elementary contraction in the Fermi vacuum -------------------------------

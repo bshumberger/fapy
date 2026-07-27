@@ -29,7 +29,7 @@ from dataclasses import dataclass, field
 from fractions import Fraction
 from itertools import permutations
 
-from .tensor import Tensor
+from .operators import Integral
 
 
 # --- tensor permutational symmetry -------------------------------------------
@@ -109,21 +109,21 @@ def canonical_tensor(tensor):
         if best_idx is None or idx < best_idx:
             best_idx = idx
             best_sign = sign
-    return Tensor(tensor.name, best_idx, tensor.symmetry), best_sign
+    return Integral(tensor.name, best_idx, tensor.symmetry), best_sign
 
 
 # --- canonical form of a whole term -------------------------------------------
 
 @dataclass
 class CanonicalTerm:
-    """A collected term: a coefficient times a canonical product of tensors."""
+    """A collected term: a coefficient times a canonical product of integrals."""
     coefficient: Fraction
-    tensors: list                     # list[Tensor] in canonical, sorted order
+    integrals: list                   # list[Integral] in canonical, sorted order
     index_spaces: dict = field(default_factory=dict)
 
     def __repr__(self):
         sign = "+" if self.coefficient >= 0 else "-"
-        body = " ".join(repr(t) for t in self.tensors) or "1"
+        body = " ".join(repr(t) for t in self.integrals) or "1"
         return f"{sign}{abs(self.coefficient)} {body}"
 
 
@@ -135,7 +135,7 @@ def _dummy_labels(term, external_set):
     occupied dummy to an occupied slot and a virtual dummy to a virtual slot.
     """
     occ, virt = set(), set()
-    for tensor in term.tensors:
+    for tensor in term.integrals:
         for label in tensor.indices:
             if label in external_set:
                 continue
@@ -171,10 +171,10 @@ def canonicalize_term(term, external_set, external_spaces):
 
             sign = 1
             canon = []
-            for tensor in term.tensors:
+            for tensor in term.integrals:
                 # Relabel through the dummy map while carrying the tensor's own
                 # symmetry annotation along, so the reduction below still knows it.
-                renamed = tensor.substitute(rename)
+                renamed = tensor.relabel_indices(rename)
                 reduced, s = canonical_tensor(renamed)
                 sign *= s
                 canon.append((reduced.name, reduced.indices))
@@ -230,8 +230,8 @@ def canonicalize(terms, externals=()):
         if coeff == 0:
             # The contributions cancelled exactly; this term is not present.
             continue
-        tensors = [Tensor(name, indices) for (name, indices) in key]
-        collected.append(CanonicalTerm(coeff, tensors, spaces_by_key[key]))
+        integrals = [Integral(name, indices) for (name, indices) in key]
+        collected.append(CanonicalTerm(coeff, integrals, spaces_by_key[key]))
     return collected
 
 
@@ -243,6 +243,6 @@ def format_canonical(terms):
     for t in terms:
         sign = "+" if t.coefficient >= 0 else "-"
         mag = abs(t.coefficient)
-        body = " ".join(repr(x) for x in t.tensors) or "1"
+        body = " ".join(repr(x) for x in t.integrals) or "1"
         parts.append(f"{sign} {mag} {body}")
     return " ".join(parts).lstrip("+ ").strip()

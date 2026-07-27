@@ -20,7 +20,7 @@ keeps the two apart; the two operators are given DISJOINT dummy labels.
 
 from fractions import Fraction
 
-from deltapq import vev, canonicalize, operators as op
+from deltapq import vev, canonicalize, operator_library as op
 from deltapq.tests.utils import term_multiset
 
 
@@ -60,7 +60,7 @@ def test_c2dagger_f_n_c2_two_terms_occ_and_virt():
     # exactly the f_ab and f_ij structure of the notes.
     fock_space = {}
     for t in terms:
-        (fock,) = [x for x in t.tensors if x.name == "f"]
+        (fock,) = [x for x in t.integrals if x.name == "f"]
         spaces = {t.index_spaces[i] for i in fock.indices}
         fock_space[t.coefficient] = spaces
     assert fock_space[Fraction(1, 2)] == {"virt"}
@@ -82,7 +82,7 @@ def test_c2dagger_v_n_c2_three_terms_ladders_and_ring():
     # integral of each surviving term by how many of its indices are occupied.
     occ_counts = []
     for t in terms:
-        (g,) = [x for x in t.tensors if x.name == "g"]
+        (g,) = [x for x in t.integrals if x.name == "g"]
         occ_counts.append(sum(t.index_spaces[i] == "occ" for i in g.indices))
     # ladders: 4 occupied (<ij||kl>) and 0 occupied (<ab||cd>); ring: 2 occupied.
     assert sorted(occ_counts) == [0, 2, 4]

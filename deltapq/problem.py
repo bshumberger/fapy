@@ -13,7 +13,7 @@ symbolic equation.
 
 An input file therefore reads like a short problem statement:
 
-    from deltapq import Problem, operators as op
+    from deltapq import Problem, operator_library as op
 
     energy = Problem(
         name = "MP2 energy",

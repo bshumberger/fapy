@@ -1,30 +1,11 @@
-"""
-The expression layer: the algebra of sums, products, and commutators of
-operators that sits ABOVE the operator-string layer.
-
-An operator like the normal-ordered Hamiltonian is not a single string -- it is a
-sum of blocks (F_N + V_N), and a cluster expansion multiplies such sums together
-and takes their commutators. Rather than teach the contraction kernel about any
-of that, we expand every expression down to a flat sum of
-
-    (coefficient, tuple-of-operator-blocks, policy)
-
-triples FIRST, and only then hand each triple to the kernel. A commutator
-``[A, B]`` is literally ``A*B - B*A`` at this layer; because the fermionic sign
-depends on the left-to-right order in which blocks are flattened, evaluating the
-two orderings separately gets the relative sign right for free.
-
-This is the single abstraction that lets one kernel serve MP2, CI, and coupled
-cluster, and the same machinery will later host commutators with the orbital
-rotation operator ``kappa`` for orbital-response terms.
-"""
+"""Contains the expression algebra (sums, products, commutators, permutations) and its evaluation to a vacuum expectation value."""
 
 from dataclasses import dataclass
 from fractions import Fraction
 from typing import Tuple
 
-from .core import Operator
-from .tensor import OperatorBlock, Tensor, Term, contract_blocks
+from .operators import Operator, OperatorBlock, Integral
+from .wick import contract_blocks, Term
 from .policy import normal_ordered_blocks
 
 
@@ -32,11 +13,15 @@ from .policy import normal_ordered_blocks
 class ExprTerm:
     """One additive term of an expression: a scalar times a product of blocks.
 
-    ``coefficient`` collects the operator prefactors (the 1/4 on V_N, the 1/2 on
-    a Hartree-Fock energy term, ...). ``blocks`` is the ordered product of
-    normal-ordered blocks whose left-to-right order fixes the sign on
-    contraction. ``policy`` is the contraction policy the kernel should use for
-    this term.
+    Attributes
+    ----------
+    coefficient : Fraction
+        The accumulated operator prefactors (e.g. the 1/4 on V_N).
+    blocks : tuple of OperatorBlock
+        The ordered product of blocks. The left-to-right order matters: it fixes
+        the fermionic sign on contraction.
+    policy : callable
+        The contraction policy the kernel should use for this term.
     """
     coefficient: Fraction
     blocks: Tuple[OperatorBlock, ...]
@@ -46,37 +31,72 @@ class ExprTerm:
 class Expression:
     """A sum of ``ExprTerm``s supporting +, -, scalar and operator products.
 
-    Building an expression never contracts anything; it only accumulates the
-    triples. Call ``vev`` to actually evaluate a vacuum expectation value once the
-    expression is assembled.
+    Attributes
+    ----------
+    terms : list of ExprTerm
+        The additive terms. Order is irrelevant to the sum but preserved for
+        readable, reproducible output.
+
+    Notes
+    -----
+    Building an expression never contracts anything; it only accumulates terms.
+    Call ``vev`` to evaluate a vacuum expectation value once it is assembled.
     """
 
     def __init__(self, terms):
-        # Keep the terms as a plain list; order is irrelevant to a sum but we
-        # preserve insertion order for readable, reproducible output.
         self.terms = list(terms)
 
     # --- constructors ---------------------------------------------------------
 
     @classmethod
     def single(cls, block, coefficient=Fraction(1), policy=normal_ordered_blocks):
-        """An expression consisting of one block times a scalar coefficient."""
+        """An expression consisting of one block times a scalar coefficient.
+
+        Parameters
+        ----------
+        block : OperatorBlock
+            The single block.
+        coefficient : Fraction, optional
+            Scalar prefactor.
+        policy : callable, optional
+            Contraction policy.
+
+        Returns
+        -------
+        Expression
+        """
         return cls([ExprTerm(Fraction(coefficient), (block,), policy)])
 
     @classmethod
     def zero(cls):
-        """The empty sum, which contracts to nothing."""
+        """The empty sum, which contracts to nothing.
+
+        Returns
+        -------
+        Expression
+        """
         return cls([])
 
     @classmethod
     def identity(cls, policy=normal_ordered_blocks):
-        """The multiplicative unit: one term of coefficient 1 with NO blocks.
+        """The multiplicative unit: one term of coefficient 1 with no blocks.
 
+        Parameters
+        ----------
+        policy : callable, optional
+            Contraction policy.
+
+        Returns
+        -------
+        Expression
+
+        Notes
+        -----
         Multiplying any expression by this leaves it unchanged, since the product
-        just concatenates block tuples and appending an empty tuple is a no-op.
-        This is what a reference determinant ``<Phi_0|`` or ``|Phi_0>`` becomes at
-        the operator-string layer -- it contributes no operators, only the bracket
-        it sits in -- so a plain energy ``<Phi_0| expr |Phi_0>`` can be written as
+        concatenates block tuples and appending an empty tuple is a no-op. It is
+        what a reference determinant ``<Phi_0|`` or ``|Phi_0>`` becomes at the
+        operator-string layer -- it contributes no operators, only the bracket it
+        sits in -- so a plain energy ``<Phi_0| expr |Phi_0>`` can be written as
         ``identity * expr * identity`` and evaluated by the same path as a
         projection onto an excited manifold.
         """
@@ -85,7 +105,7 @@ class Expression:
     # --- additive structure ---------------------------------------------------
 
     def __add__(self, other):
-        # A sum simply concatenates the two lists of triples.
+        # A sum simply concatenates the two lists of terms.
         return Expression(self.terms + other.terms)
 
     def __neg__(self):
@@ -101,7 +121,17 @@ class Expression:
     # --- multiplicative structure ---------------------------------------------
 
     def scale(self, c):
-        """Multiply every term by a scalar (prefactor) ``c``."""
+        """Multiply every term by a scalar prefactor.
+
+        Parameters
+        ----------
+        c : int or Fraction
+            The scalar.
+
+        Returns
+        -------
+        Expression
+        """
         c = Fraction(c)
         return Expression(
             [ExprTerm(c * t.coefficient, t.blocks, t.policy) for t in self.terms]
@@ -141,8 +171,19 @@ class Expression:
 # --- commutators --------------------------------------------------------------
 
 def commutator(a: Expression, b: Expression) -> Expression:
-    """The commutator [A, B] = A*B - B*A, expanded at the expression layer.
+    """The commutator [A, B] = A*B - B*A.
 
+    Parameters
+    ----------
+    a, b : Expression
+        The two operators.
+
+    Returns
+    -------
+    Expression
+
+    Notes
+    -----
     Nothing here knows about contractions: the commutator is just the difference
     of the two operator orderings. The kernel later assigns each ordering its own
     sign, so the physical antisymmetry falls out of evaluating both products.
@@ -150,19 +191,29 @@ def commutator(a: Expression, b: Expression) -> Expression:
     return a * b - b * a
 
 
-def nested_commutator(a: Expression, *rest: Expression) -> Expression:
+def left_nested_commutator(a: Expression, *rest: Expression) -> Expression:
     """The left-nested commutator [[...[[A, B1], B2], ...], Bn].
 
-    Terms like [[H, T], T] appear all over the Baker-Campbell-Hausdorff expansion
-    a user does by hand before handing the engine an operator expression. Writing
-    those as ``commutator(commutator(commutator(h, t), t), t)`` is noisy, so this
-    folds the ordinary two-argument commutator from the left: the first argument
-    is the "inner" operator and each remaining argument is bracketed onto it in
-    turn. With no ``rest`` it just returns ``a`` unchanged (an empty nest).
+    Parameters
+    ----------
+    a : Expression
+        The innermost operator.
+    *rest : Expression
+        Operators bracketed onto ``a`` from the left, in order.
 
-    The operators passed in must already use disjoint dummy labels where they
-    repeat (for example two doubles operators on ``i,j,a,b`` and ``k,l,c,d``);
-    the engine does not yet relabel dummies for you.
+    Returns
+    -------
+    Expression
+        ``a`` unchanged when no ``rest`` is given (an empty nest).
+
+    Notes
+    -----
+    Terms like [[H, T], T] appear throughout the Baker-Campbell-Hausdorff
+    expansion a user does by hand before handing the engine an expression; this
+    folds the ordinary two-argument commutator from the left so they need not be
+    written as nested ``commutator`` calls. Operators that repeat must already use
+    disjoint dummy labels (for example two doubles on i,j,a,b and k,l,c,d) -- the
+    engine does not relabel dummies for you.
     """
     result = a
     for b in rest:
@@ -170,15 +221,49 @@ def nested_commutator(a: Expression, *rest: Expression) -> Expression:
     return result
 
 
+def right_nested_commutator(a: Expression, *rest: Expression) -> Expression:
+    """The right-nested commutator [A, [B1, [ ..., [Bn-1, Bn] ]]].
+
+    Parameters
+    ----------
+    a : Expression
+        The outermost-left operator.
+    *rest : Expression
+        Operators nested to the right, in order.
+
+    Returns
+    -------
+    Expression
+        ``a`` unchanged when no ``rest`` is given. This is the mirror of
+        ``left_nested_commutator``: with fewer than two ``rest`` operators the two
+        agree, and they differ only in how three or more operators nest.
+    """
+    if not rest:
+        return a
+    return commutator(a, right_nested_commutator(*rest))
+
+
 # --- permutation operators ----------------------------------------------------
 
 def relabel(expr: Expression, mapping) -> Expression:
     """Return a copy of ``expr`` with index labels remapped by ``mapping``.
 
-    Every operator label and every tensor index in the expression is sent
-    through ``mapping`` (labels absent from it are unchanged). Since operators and
-    tensors are frozen, this rebuilds them. Used by the permutation operator to
-    form the swapped copy of an expression.
+    Parameters
+    ----------
+    expr : Expression
+        The expression to relabel.
+    mapping : dict
+        Maps each label to its replacement; labels absent from it are unchanged.
+
+    Returns
+    -------
+    Expression
+
+    Notes
+    -----
+    Every operator label and every factor index is sent through ``mapping``. Since
+    operators and factors are frozen, this rebuilds them. Used by the permutation
+    operator to form the swapped copy of an expression.
     """
     new_terms = []
     for t in expr.terms:
@@ -188,14 +273,14 @@ def relabel(expr: Expression, mapping) -> Expression:
                 Operator(mapping.get(o.label, o.label), o.dagger, o.space, o.group)
                 for o in blk.ops
             )
-            new_tensor = None
-            if blk.tensor is not None:
-                new_tensor = Tensor(
-                    blk.tensor.name,
-                    tuple(mapping.get(i, i) for i in blk.tensor.indices),
-                    blk.tensor.symmetry,
+            new_integral = None
+            if blk.integral is not None:
+                new_integral = Integral(
+                    blk.integral.name,
+                    tuple(mapping.get(i, i) for i in blk.integral.indices),
+                    blk.integral.symmetry,
                 )
-            new_blocks.append(OperatorBlock(new_ops, new_tensor))
+            new_blocks.append(OperatorBlock(new_ops, new_integral))
         new_terms.append(ExprTerm(t.coefficient, tuple(new_blocks), t.policy))
     return Expression(new_terms)
 
@@ -203,13 +288,25 @@ def relabel(expr: Expression, mapping) -> Expression:
 def P(expr: Expression, pair) -> Expression:
     """The antisymmetrizing permutation operator P(pq) = 1 - (p q).
 
-    ``P(expr, (p, q))`` returns ``expr`` minus the copy of ``expr`` with the two
-    labels p and q swapped, exactly the shorthand used to write amplitude
-    equations compactly (e.g. the CISD doubles residual). Because it takes and
-    returns an ``Expression``, the products used in the notes compose by nesting:
-    ``P(P(expr, (a, b)), (i, j))`` is P(ij)P(ab). This is the FORWARD expander
-    (it produces the explicit terms); recognizing P structure in a collected
-    result is a separate, future concern.
+    Parameters
+    ----------
+    expr : Expression
+        The expression to antisymmetrize.
+    pair : tuple of str
+        The two labels (p, q) to swap.
+
+    Returns
+    -------
+    Expression
+        ``expr`` minus its copy with p and q swapped.
+
+    Notes
+    -----
+    This is the shorthand used to write amplitude equations compactly (e.g. the
+    CISD doubles residual). Because it takes and returns an ``Expression``, the
+    products in the notes compose by nesting: ``P(P(expr, (a, b)), (i, j))`` is
+    P(ij)P(ab). It is the FORWARD expander (it produces the explicit terms);
+    recognizing P structure in a collected result is a separate, future concern.
     """
     p, q = pair
     swapped = relabel(expr, {p: q, q: p})
@@ -221,10 +318,17 @@ def P(expr: Expression, pair) -> Expression:
 def vev(expr: Expression):
     """Evaluate the Fermi-vacuum expectation value <Phi_0| expr |Phi_0>.
 
-    Each expression term is contracted by the kernel, and the term's scalar
-    coefficient (its accumulated prefactors) multiplies the fermionic sign the
-    kernel returns. The result is a flat list of ``Term`` objects; combining and
-    canonicalizing them is a later stage.
+    Parameters
+    ----------
+    expr : Expression
+        The assembled expression.
+
+    Returns
+    -------
+    list of Term
+        The raw, uncollected terms: each expression term is contracted by the
+        kernel and its coefficient multiplies the fermionic sign. Combining and
+        canonicalizing them is a later stage.
     """
     out = []
     for t in expr.terms:
@@ -232,7 +336,7 @@ def vev(expr: Expression):
             out.append(
                 Term(
                     coefficient=t.coefficient * term.coefficient,
-                    tensors=term.tensors,
+                    integrals=term.integrals,
                     index_spaces=term.index_spaces,
                 )
             )

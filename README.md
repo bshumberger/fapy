@@ -48,18 +48,17 @@ See the worked problems in `deltapq/tests/test_007_MP2.py`,
 
 ```
 deltapq/
-    core.py          operators and constructors (the "nouns")
-    contraction.py   the elementary contraction rule + matching combinatorics
-    wick.py          the full-contraction driver
-    policy.py        which pairs may contract (generalized Wick, ...)
-    resolve.py       delta resolution + occupancy propagation
-    tensor.py        tensors attached to blocks; resolved Terms
-    expression.py    the expression algebra (+, *, commutator, nested_commutator)
-    operators.py     the operator library (H_N/F_N/V_N, excitations, manifolds)
-    canonicalize.py  tensor symmetry + dummy renaming + term collection
-    problem.py       the Problem input-file interface
-    tests/           in-package pytest suite; the MP2/CISD/CCSD problems
-                     are stated inline as worked examples
+    operators.py         the data model: Operator, Integral, OperatorBlock, Term
+    contraction.py       the elementary contraction rule + matching combinatorics
+    policy.py            which pairs may contract (generalized Wick, ...)
+    resolve.py           delta resolution + occupancy propagation
+    wick.py              the full-contraction driver + contract_blocks
+    expression.py        the expression algebra (+, *, commutator, nested commutators)
+    operator_library.py  the operator library (H_N/F_N/V_N, excitations, manifolds)
+    canonicalize.py      symmetry + dummy renaming + term collection
+    problem.py           the Problem input-file interface
+    tests/               in-package pytest suite; the MP2/CISD/CCSD problems
+                         are stated inline as worked examples
 ```
 
 ## Installation

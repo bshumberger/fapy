@@ -9,8 +9,8 @@ reversed annihilator ordering demanded by the notes.
 
 from fractions import Fraction
 
-from deltapq.expression import Expression, commutator, nested_commutator, vev
-from deltapq import operators as ops
+from deltapq.expression import Expression, commutator, left_nested_commutator, vev
+from deltapq import operator_library as ops
 
 
 # --- expression layer ---------------------------------------------------------
@@ -35,15 +35,15 @@ def test_commutator_expands_to_ab_minus_ba():
     assert ab.coefficient == -ba.coefficient
 
 
-def test_nested_commutator_folds_from_the_left():
-    """nested_commutator(A, B, C) equals commutator(commutator(A, B), C)."""
+def test_left_nested_commutator_folds_from_the_left():
+    """left_nested_commutator(A, B, C) equals commutator(commutator(A, B), C)."""
     # Use three distinct operators so the two ways of writing the nest are
     # comparable term by term (blocks and coefficients).
     a = ops.F_N
     b = ops.doubles("t", "i", "j", "a", "b")
     c = ops.doubles("t", "k", "l", "c", "d")
 
-    folded = nested_commutator(a, b, c)
+    folded = left_nested_commutator(a, b, c)
     manual = commutator(commutator(a, b), c)
 
     def signature(expr):
@@ -53,7 +53,7 @@ def test_nested_commutator_folds_from_the_left():
 
     assert signature(folded) == signature(manual)
     # A bare nest with no further operators is just the operator itself.
-    assert signature(nested_commutator(a)) == signature(a)
+    assert signature(left_nested_commutator(a)) == signature(a)
 
 
 # --- a hand-checkable projection ----------------------------------------------
@@ -71,7 +71,7 @@ def test_singles_projection_of_fock():
     term = terms[0]
     assert term.coefficient == 1
 
-    (fock,) = term.tensors
+    (fock,) = term.integrals
     assert fock.name == "f"
     # The two Fock indices resolve to one virtual and one occupied index.
     resolved_spaces = {idx: term.index_spaces[idx] for idx in fock.indices}
@@ -90,7 +90,7 @@ def test_v_n_with_t2_is_nonzero_and_carries_both_tensors():
 
     assert len(terms) > 0
     for term in terms:
-        names = sorted(t.name for t in term.tensors)
+        names = sorted(t.name for t in term.integrals)
         assert names == ["g", "t2"]
 
 

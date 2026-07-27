@@ -9,7 +9,7 @@ correlation energy (1/4) <ij||ab> t_ij^ab, and the doubles amplitude numerator
 
 from fractions import Fraction
 
-from deltapq import Problem, operators as op
+from deltapq import Problem, operator_library as op
 
 
 def test_mp2_energy_is_quarter_integral_amplitude():
@@ -26,10 +26,10 @@ def test_mp2_energy_is_quarter_integral_amplitude():
     assert len(terms) == 1
     term = terms[0]
     assert term.coefficient == Fraction(1, 4)
-    assert sorted(t.name for t in term.tensors) == ["g", "t"]
+    assert sorted(t.name for t in term.integrals) == ["g", "t"]
 
     # The integral and amplitude are summed over the same four dummy indices.
-    integral, amplitude = term.tensors
+    integral, amplitude = term.integrals
     assert set(integral.indices) == set(amplitude.indices)
 
 
@@ -51,7 +51,7 @@ def test_mp2_amplitude_numerator_is_the_integral():
     # leaving a bare integral with unit coefficient.
     assert abs(term.coefficient) == 1
 
-    (integral,) = term.tensors
+    (integral,) = term.integrals
     assert integral.name == "g"
     # The surviving indices are exactly the external labels of the projection.
     assert set(integral.indices) == {"i", "j", "a", "b"}

@@ -209,8 +209,8 @@ annotation would canonicalize it to `f_ba` and silently corrupt the complex case
 The antisymmetrized integral `<pq||rs>` has the same exposure (its antisymmetry is
 exact only for real orbitals); making all tensor symmetries **declarable per run**
 (real/symmetric vs complex/Hermitian) is the general fix — see the symmetry
-cleanup under Generality. Removed from both the `Tensor` annotation on `F_N`
-(`operators.py`) and the name-table fallback (`canonicalize.py`).
+cleanup under Generality. Removed from both the `Integral` annotation on `F_N`
+(`operator_library.py`) and the name-table fallback (`canonicalize.py`).
 
 ### First validation target
 ```
@@ -290,7 +290,8 @@ Problem(
 ```
 
 - `expr` is built from the operator library and the expression algebra (`*`,
-  `+`, `commutator`, `nested_commutator`, `P`). The operator library has:
+  `+`, `commutator`, `left_nested_commutator`, `right_nested_commutator`, `P`).
+  The operator library has:
   - `H_N`/`F_N`/`V_N` — the normal-ordered Hamiltonian;
   - `singles(name)`/`doubles(name)` — excitation operators (CC `T`, CI `C`, ...);
   - `singles_dagger(name)`/`doubles_dagger(name)` — the de-excitation adjoints
@@ -305,7 +306,7 @@ Problem(
   indices, inferred automatically (override via `externals=`).
 - `Problem.derive()` returns collected `CanonicalTerm`s; `.report()` prints them.
 - The user does any **BCH / `exp(T)` expansion by hand** and hands the engine the
-  resulting expression; `nested_commutator(H, T, T, ...)` transcribes
+  resulting expression; `left_nested_commutator(H, T, T, ...)` transcribes
   `[[H,T],T]`-style terms. Worked problems are stated inline in the numbered
   method tests (`test_007_MP2.py` … `test_012_orbital_rotation.py`).
 - **Repeated operators need disjoint dummy labels** (auto-relabeling is a future
@@ -323,10 +324,25 @@ keeps the general `f_ov` (Brillouin) terms that Eq. 27 drops at canonical HF;
 - **User-defined custom operators.** Today a problem composes only the built-in
   operators. Letting an input file declare a *new* operator (its creation/
   annihilation string, prefactor, amplitude tensor, and symmetry) would make the
-  engine fully general. Symmetry already travels on the `Tensor` (annotation
+  engine fully general. Symmetry already travels on the `Integral` (annotation
   carried by the operator constructors), so this is the natural next extension.
 - **Automatic dummy relabeling** so repeated operators (e.g. `T1*T1`,
   `[[H,T2],T2]`) need not be given disjoint index labels by hand.
+- **Mixed contraction policies in a product (the policy conflict).**
+  `Expression.__mul__` refuses to multiply two terms whose `policy` differs,
+  because a product merges their blocks into one operator string and a single
+  string can carry only one policy — there is no mechanism to combine two
+  `may_contract` rules for the joined string. Consequently a genuinely
+  non-normal-ordered operator (one needing, say, `contract_all` so its own
+  operators may self-contract) cannot be multiplied with a normal-ordered
+  operator like `F_N`. Today `kappa` sidesteps this by being built as the
+  *difference of two normal-ordered blocks* — exact for the antisymmetric
+  `E_pq^-` because the reference-contraction (δ) pieces cancel — so it shares the
+  `normal_ordered_blocks` policy and never trips the guard. Other
+  non-normal-ordered operators won't have that luxury. The fix is to make
+  policies composable, most likely a **per-block / block-aware `may_contract`**
+  so a product can apply the right rule to each block's operators (ties to
+  Generality constraint #1). **Revisit this.**
 - `exp(T)` / BCH truncation as a built-in; LaTeX output.
 
 ---

@@ -15,7 +15,34 @@ introduced and no coupled-cluster result downstream can be trusted.
 
 from deltapq import cre, ann
 from deltapq.policy import contract_all
-from deltapq.tensor import Tensor, contract_blocks, block
+from deltapq.operators import Integral, block
+from deltapq.wick import contract_blocks
+
+
+def test_integral_relabel_indices_and_passes_through():
+    """Integral.relabel_indices rewrites indices through the map and leaves the rest.
+
+    This is the step that "spends" a delta: the resolution map identifies indices,
+    and relabel_indices pushes those identifications into a factor. Indices absent
+    from the map pass through unchanged, and the symmetry annotation rides along.
+    """
+    # Every index is in the map -> full relabel: f(p,q) -> f(a,i).
+    f = Integral("f", ("p", "q"))
+    assert f.relabel_indices({"p": "a", "q": "i"}).indices == ("a", "i")
+
+    # Only some indices are in the map -> the rest pass through untouched:
+    # g(p,q,r,s) with {p->i, q->j} leaves r, s alone.
+    g = Integral("g", ("p", "q", "r", "s"))
+    assert g.relabel_indices({"p": "i", "q": "j"}).indices == ("i", "j", "r", "s")
+
+    # The symmetry annotation is preserved, and the original is unchanged (the
+    # method returns a new frozen copy rather than mutating in place).
+    sym = (((1, 0), -1),)
+    t = Integral("t", ("p", "q"), sym)
+    out = t.relabel_indices({"p": "a", "q": "b"})
+    assert out.indices == ("a", "b")
+    assert out.symmetry == sym
+    assert t.indices == ("p", "q")
 
 
 def test_fock_self_contraction_gives_trace():
@@ -26,7 +53,7 @@ def test_fock_self_contraction_gives_trace():
     normal-ordered remainder. We check the constant piece: a single term, sign
     +1, with both tensor indices collapsed onto one occupied index.
     """
-    f_block = block([cre("p", "gen"), ann("q", "gen")], Tensor("f", ("p", "q")))
+    f_block = block([cre("p", "gen"), ann("q", "gen")], Integral("f", ("p", "q")))
 
     # Use contract_all so the two operators inside the one block may contract.
     terms = contract_blocks(f_block, policy=contract_all)
@@ -35,7 +62,7 @@ def test_fock_self_contraction_gives_trace():
     term = terms[0]
     assert term.coefficient == 1
     # Both indices resolve onto the same occupied representative -> f_ii.
-    (tensor,) = term.tensors
+    (tensor,) = term.integrals
     assert tensor.name == "f"
     assert tensor.indices[0] == tensor.indices[1]
     rep = tensor.indices[0]
@@ -53,7 +80,7 @@ def test_two_electron_double_contraction_sign_pin():
     # written in the notes. The integral indices are (p, q, r, s).
     g_block = block(
         [cre("p", "gen"), cre("q", "gen"), ann("s", "gen"), ann("r", "gen")],
-        Tensor("g", ("p", "q", "r", "s")),
+        Integral("g", ("p", "q", "r", "s")),
     )
 
     terms = contract_blocks(g_block, policy=contract_all)
@@ -67,14 +94,14 @@ def test_two_electron_double_contraction_sign_pin():
 
     # + delta_pr delta_qs : p~r and q~s, so g(p,q,r,s) -> g(p,q,p,q).
     assert positive.coefficient == 1
-    (pos_tensor,) = positive.tensors
+    (pos_tensor,) = positive.integrals
     p, q, r, s = pos_tensor.indices
     assert p == r and q == s          # the pr and qs identifications
     assert p != q                     # the two classes stay distinct
 
     # - delta_ps delta_qr : p~s and q~r, so g(p,q,r,s) -> g(p,q,q,p).
     assert negative.coefficient == -1
-    (neg_tensor,) = negative.tensors
+    (neg_tensor,) = negative.integrals
     p2, q2, r2, s2 = neg_tensor.indices
     assert p2 == s2 and q2 == r2      # the ps and qr identifications
     assert p2 != q2

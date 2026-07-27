@@ -9,10 +9,11 @@ into the single physical result (1/4) <ij||ab> t_ij^ab.
 
 from fractions import Fraction
 
-from deltapq.tensor import Tensor, Term
+from deltapq.operators import Integral
+from deltapq.wick import Term
 from deltapq.canonicalize import canonicalize, canonical_tensor
 from deltapq.expression import vev
-from deltapq import operators as ops
+from deltapq import operator_library as ops
 
 
 # --- the two disguises, in isolation ------------------------------------------
@@ -20,8 +21,8 @@ from deltapq import operators as ops
 def test_integral_antisymmetry_cancels():
     """g(i,j,a,b) + g(j,i,a,b) cancels: the two are related by p<->q antisymmetry."""
     spaces = {"i": "occ", "j": "occ", "a": "virt", "b": "virt"}
-    t1 = Term(Fraction(1), [Tensor("g", ("i", "j", "a", "b"))], dict(spaces))
-    t2 = Term(Fraction(1), [Tensor("g", ("j", "i", "a", "b"))], dict(spaces))
+    t1 = Term(Fraction(1), [Integral("g", ("i", "j", "a", "b"))], dict(spaces))
+    t2 = Term(Fraction(1), [Integral("g", ("j", "i", "a", "b"))], dict(spaces))
 
     # Antisymmetry sends the second onto minus the first, so they sum to zero and
     # the collected result is empty.
@@ -30,9 +31,9 @@ def test_integral_antisymmetry_cancels():
 
 def test_dummy_relabelling_is_collected():
     """The same amplitude written with different dummy names is one term."""
-    t1 = Term(Fraction(1, 2), [Tensor("t2", ("i", "j", "a", "b"))],
+    t1 = Term(Fraction(1, 2), [Integral("t2", ("i", "j", "a", "b"))],
               {"i": "occ", "j": "occ", "a": "virt", "b": "virt"})
-    t2 = Term(Fraction(1, 2), [Tensor("t2", ("k", "l", "c", "d"))],
+    t2 = Term(Fraction(1, 2), [Integral("t2", ("k", "l", "c", "d"))],
               {"k": "occ", "l": "occ", "c": "virt", "d": "virt"})
 
     result = canonicalize([t1, t2])
@@ -42,7 +43,7 @@ def test_dummy_relabelling_is_collected():
 
 def test_canonical_tensor_reduces_and_tracks_sign():
     """A single tensor reduces to its smallest arrangement with the right sign."""
-    reduced, sign = canonical_tensor(Tensor("g", ("O1", "O0", "V0", "V1")))
+    reduced, sign = canonical_tensor(Integral("g", ("O1", "O0", "V0", "V1")))
     assert reduced.indices == ("O0", "O1", "V0", "V1")
     assert sign == -1
 
@@ -60,7 +61,7 @@ def test_v_t2_collects_to_quarter_integral_amplitude():
     assert len(collected) == 1
     term = collected[0]
     assert term.coefficient == Fraction(1, 4)
-    assert sorted(t.name for t in term.tensors) == ["g", "t2"]
+    assert sorted(t.name for t in term.integrals) == ["g", "t2"]
 
 
 def test_f_t1_collects_to_single_fock_amplitude_term():
@@ -74,4 +75,4 @@ def test_f_t1_collects_to_single_fock_amplitude_term():
 
     assert len(collected) == 1
     assert collected[0].coefficient == Fraction(1)
-    assert sorted(t.name for t in collected[0].tensors) == ["f", "t1"]
+    assert sorted(t.name for t in collected[0].integrals) == ["f", "t1"]

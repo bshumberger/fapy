@@ -8,29 +8,38 @@ know about any particular level of theory. This top-level module simply re-expor
 the handful of names most commonly reached for when building a string by hand.
 """
 
-from .core import Space, Operator, cre, ann, group_string
+from .operators import (
+    Space,
+    Operator,
+    cre,
+    ann,
+    group_string,
+    Integral,
+    OperatorBlock,
+    block,
+)
 from .contraction import contraction, recursive_generator, fermion_sign
 from .policy import ContractionPolicy, normal_ordered_blocks, contract_all
-from .wick import wick_vev
+from .wick import wick_vev, contract_blocks, Term
 from .resolve import (
     ResolvedTerm,
     declared_spaces,
     resolve_term,
     resolve_terms,
 )
-from .tensor import Tensor, OperatorBlock, Term, contract_blocks, block
 from .expression import (
     Expression,
     ExprTerm,
     commutator,
-    nested_commutator,
+    left_nested_commutator,
+    right_nested_commutator,
     relabel,
     P,
     vev,
 )
 from .canonicalize import CanonicalTerm, canonicalize, canonical_tensor, format_canonical
 from .problem import Problem
-from . import operators
+from . import operator_library
 
 __version__ = "0.1.0"
 
@@ -51,7 +60,7 @@ __all__ = [
     "declared_spaces",
     "resolve_term",
     "resolve_terms",
-    "Tensor",
+    "Integral",
     "OperatorBlock",
     "Term",
     "contract_blocks",
@@ -59,7 +68,8 @@ __all__ = [
     "Expression",
     "ExprTerm",
     "commutator",
-    "nested_commutator",
+    "left_nested_commutator",
+    "right_nested_commutator",
     "relabel",
     "P",
     "vev",
@@ -68,5 +78,5 @@ __all__ = [
     "canonical_tensor",
     "format_canonical",
     "Problem",
-    "operators",
+    "operator_library",
 ]

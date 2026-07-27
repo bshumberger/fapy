@@ -1,221 +1,196 @@
-"""
-The operator library: the concrete second-quantized operators a derivation is
-built from, expressed in the expression layer.
+"""Contains the elementary creation/annihilation operator and the constructors for building tagged operator strings."""
 
-Every operator here follows the conventions of the notes ("The Normal-Ordered
-Hamiltonian"):
+from dataclasses import dataclass, field
+from typing import Literal, Optional, Tuple
 
-    H_N = F_N + V_N
-    F_N = sum_pq f_pq {a_p^ a_q}
-    V_N = (1/4) sum_pqrs <pq||rs> {a_p^ a_q^ a_s a_r}
-
-Note the reversed annihilator ordering ``a_s a_r`` in V_N (and ``a_j a_i`` in the
-doubles excitation operator): the annihilators run in the opposite order to the
-creators. Getting that order wrong is a silent sign error, so it is asserted by a
-test.
-
-The excitation operators ``singles`` and ``doubles`` are the elementary
-excitations of the reference. They are the SAME objects whether they play the
-role of a coupled-cluster T operator or a configuration-interaction C operator --
-the only thing that varies is the amplitude tensor they carry, whose name the
-caller supplies. What actually distinguishes the methods is how a driver USES
-them (linearly in CI, exponentially in CC), not the operators themselves, so a
-single definition serves every method. The projection manifolds ``bra_*`` /
-``ket_*`` are the excited determinants a method projects onto; they carry no
-tensor of their own.
-
-The orbital-rotation operator ``kappa`` is the explicit antisymmetric generator
-``kappa_pq (a_p^ a_q - a_q^ a_p)``, used inside orbital-response commutators such
-as ``[H_N, kappa]``. Summed over p > q it is the full rotation generator; a single
-(p, q) pair is returned and the caller supplies the labels.
-"""
-
-from fractions import Fraction
-
-from .core import cre, ann
-from .tensor import Tensor, block
-from .expression import Expression
+# Orbital space of an index; "gen" may resolve to "occ" or "virt" on contraction.
+Space = Literal["occ", "virt", "gen"]
 
 
-# --- permutational symmetries carried by the tensors --------------------------
+@dataclass(frozen=True)
+class Operator:
+    """A single creation or annihilation operator.
 
-# Each symmetry is a tuple of (permutation, sign) generators; the canonicalizer
-# closes them into the full group. Stamping these onto the tensors here means the
-# symmetry travels with the operator, so an amplitude may be named anything.
-#
-# The Fock matrix f_pq is deliberately given NO index symmetry. It is symmetric
-# only for a real Fock matrix; for a complex Hermitian Fock (e.g. an explicit
-# magnetic field, unrelaxed) f_pq = f_qp^* and the two orderings are different
-# numbers, so the p<->q ordering the contraction produces must be preserved.
+    Attributes
+    ----------
+    label : str
+        Orbital index, e.g. "i", "a", "p".
+    dagger : bool
+        True for a creator (a^), False for an annihilator (a).
+    space : {"occ", "virt", "gen"}
+        Orbital space of the index. Set explicitly rather than inferred from the
+        label, and read by the contraction rules and by delta resolution.
+    group : int
+        Block the operator belongs to. Operators sharing a group belong to the
+        same block; whether they may contract with one another is up to the
+        contraction policy (the default forbids it, treating the block as
+        normal-ordered).
 
-# Antisymmetrized integral <pq||rs>: antisymmetric in p<->q and r<->s, symmetric
-# under exchange of the pairs (pq) <-> (rs).
-_INTEGRAL_SYM = (((1, 0, 2, 3), -1), ((0, 1, 3, 2), -1), ((2, 3, 0, 1), +1))
-
-# Doubles amplitude x_ij^ab: antisymmetric in i<->j and in a<->b.
-_DOUBLES_SYM = (((1, 0, 2, 3), -1), ((0, 1, 3, 2), -1))
-
-
-# --- the normal-ordered Hamiltonian ------------------------------------------
-
-# F_N = sum_pq f_pq {a_p^ a_q}. The summation over p, q is implicit (Einstein
-# convention over the block's general indices); the tensor carries the labels.
-F_N = Expression.single(
-    block([cre("p", "gen"), ann("q", "gen")], Tensor("f", ("p", "q"))),
-    Fraction(1),
-)
-
-# V_N = (1/4) sum_pqrs <pq||rs> {a_p^ a_q^ a_s a_r}. The annihilators are written
-# a_s a_r (reversed) to match the notes, and the 1/4 is carried as the prefactor.
-V_N = Expression.single(
-    block(
-        [cre("p", "gen"), cre("q", "gen"), ann("s", "gen"), ann("r", "gen")],
-        Tensor("g", ("p", "q", "r", "s"), _INTEGRAL_SYM),
-    ),
-    Fraction(1, 4),
-)
-
-# The full normal-ordered Hamiltonian is their sum.
-H_N = F_N + V_N
-
-
-# --- excitation operators -----------------------------------------------------
-
-# These are the elementary excitations of the reference. They are FACTORIES
-# rather than fixed objects for two reasons: the amplitude tensor ``name`` is
-# supplied by the caller (so the same excitation can appear as a CC t-amplitude,
-# a CI c-amplitude, a residual, ...), and a product of two of them (for example
-# the singles-squared term in the CC energy) needs each factor to use its own
-# disjoint set of dummy indices, which the caller sets through the labels.
-
-def singles(name, i="i", a="a"):
-    """The single excitation operator sum_ia x_i^a {a_a^ a_i} carrying ``name``.
-
-    The operator string creates a particle (a_a^) and a hole (a_i): it is the
-    single excitation from occupied i into virtual a. Whether the amplitude is a
-    cluster amplitude ("t1"), a CI coefficient ("c1"), or anything else is purely
-    a matter of the ``name`` handed in -- the excitation itself is one object. The
-    singles amplitude carries no internal symmetry, so no annotation is attached.
+    Notes
+    -----
+    Frozen, hence immutable and hashable, so instances are shared freely between
+    operator strings and used directly as dictionary keys. Retagging (for example
+    changing ``group``) builds a new instance rather than mutating; see
+    ``group_string``.
     """
-    return Expression.single(
-        block([cre(a, "virt"), ann(i, "occ")], Tensor(name, (i, a))),
-        Fraction(1),
-    )
+    label: str
+    dagger: bool
+    space: Space = "gen"
+    group: int = 0
+
+    def __repr__(self):
+        tag = {"occ": "o", "virt": "v", "gen": "g"}[self.space]
+        return f"{self.label}{'^' if self.dagger else ''}[{tag}]"
 
 
-def doubles(name, i="i", j="j", a="a", b="b"):
-    """The double excitation operator (1/4) sum_ijab x_ij^ab {a_a^ a_b^ a_j a_i}.
+def cre(label, space="gen", group=0):
+    """Build a creation operator (a^).
 
-    Note the reversed hole ordering a_j a_i mirroring the reversed annihilators
-    in V_N. The 1/4 prefactor accompanies the antisymmetrized amplitude. As with
-    ``singles``, the role (CC vs CI vs residual) lives entirely in ``name``; the
-    doubles antisymmetry (i<->j, a<->b) is stamped onto the tensor so it is
-    collected correctly whatever the amplitude is named.
+    Parameters
+    ----------
+    label : str
+        Orbital index.
+    space : {"occ", "virt", "gen"}, optional
+        Orbital space of the index.
+    group : int, optional
+        Block index.
+
+    Returns
+    -------
+    Operator
+        A creator on the given orbital.
     """
-    return Expression.single(
-        block(
-            [cre(a, "virt"), cre(b, "virt"), ann(j, "occ"), ann(i, "occ")],
-            Tensor(name, (i, j, a, b), _DOUBLES_SYM),
-        ),
-        Fraction(1, 4),
-    )
+    return Operator(label, True, space, group)
 
 
-# --- de-excitation operators (the adjoints, C-dagger / Lambda) ----------------
+def ann(label, space="gen", group=0):
+    """Build an annihilation operator (a).
 
-# These are the Hermitian adjoints of the excitation operators: the daggered
-# operator strings, still carrying an amplitude. They are what a bra-side CI or
-# cluster operator (Ĉ†, Λ) is built from, so a full energy matrix element such as
-# <Phi_0| Ĉ2† Ĥ_N Ĉ2 |Phi_0> can be assembled as a product. Structurally they are
-# the bra_* manifolds with an amplitude tensor attached. When de-excitation and
-# excitation operators appear in the same sandwich, give them DISTINCT amplitude
-# names (e.g. "cd" and "c") so the collector keeps the two apart.
+    Parameters
+    ----------
+    label : str
+        Orbital index.
+    space : {"occ", "virt", "gen"}, optional
+        Orbital space of the index.
+    group : int, optional
+        Block index.
 
-def singles_dagger(name, i="i", a="a"):
-    """The single de-excitation operator sum_ia x_i^a {a_i^ a_a} carrying ``name``.
-
-    This is the adjoint of ``singles``: (a_a^ a_i)^dagger = a_i^ a_a, i.e. it
-    annihilates the particle in a and refills the hole in i. It carries no
-    internal symmetry, mirroring ``singles``.
+    Returns
+    -------
+    Operator
+        An annihilator on the given orbital.
     """
-    return Expression.single(
-        block([cre(i, "occ"), ann(a, "virt")], Tensor(name, (i, a))),
-        Fraction(1),
-    )
+    return Operator(label, False, space, group)
 
 
-def doubles_dagger(name, i="i", j="j", a="a", b="b"):
-    """The double de-excitation operator (1/4) sum_ijab x_ij^ab {a_i^ a_j^ a_b a_a}.
+def group_string(ops, group):
+    """Stamp every operator in a block with a shared group index.
 
-    This is the adjoint of ``doubles``: (a_a^ a_b^ a_j a_i)^dagger =
-    a_i^ a_j^ a_b a_a. The 1/4 prefactor and the doubles antisymmetry
-    (i<->j, a<->b) mirror ``doubles``.
+    Parameters
+    ----------
+    ops : list of Operator
+        Operators forming one block.
+    group : int
+        Group index to assign to all of them.
+
+    Returns
+    -------
+    list of Operator
+        New operators identical to ``ops`` but carrying ``group``.
+
+    Notes
+    -----
+    The shared group index lets the contraction policy recognize the operators as
+    belonging to the same block. Operators are rebuilt rather than modified
+    because ``Operator`` is frozen.
     """
-    return Expression.single(
-        block(
-            [cre(i, "occ"), cre(j, "occ"), ann(b, "virt"), ann(a, "virt")],
-            Tensor(name, (i, j, a, b), _DOUBLES_SYM),
-        ),
-        Fraction(1, 4),
-    )
+    return [Operator(o.label, o.dagger, o.space, group) for o in ops]
 
 
-# --- projection manifolds (reference and excited determinants) ----------------
+@dataclass(frozen=True)
+class Integral:
+    """A named factor over an ordered tuple of index labels (integral or amplitude).
 
-def reference():
-    """The reference determinant <Phi_0| or |Phi_0> as a projection manifold.
+    Attributes
+    ----------
+    name : str
+        Factor name, e.g. "f", "g", "t", "c", "kappa".
+    indices : tuple of str
+        Ordered index labels. Order is significant -- g("p","q","r","s") differs
+        from g("q","p","r","s") until symmetry is applied.
+    symmetry : tuple
+        Permutational symmetry as a tuple of (permutation, sign) generators.
 
-    The Fermi vacuum contributes no operators of its own -- it is only the bracket
-    a matrix element sits in -- so it is represented by the multiplicative unit of
-    the expression algebra. Using it as the bra AND the ket of a problem turns
-    ``<bra| expr |ket>`` into a plain energy ``<Phi_0| expr |Phi_0>`` without any
-    special-casing in the driver.
+    Notes
+    -----
+    Frozen and hashable, so it can key a dictionary when terms are collected.
+    ``symmetry`` travels with the object rather than being looked up by name,
+    which lets an amplitude be named anything and still be collected correctly; it
+    carries no identifying weight (two with the same name and indices are equal
+    regardless of it) and so is excluded from equality and hashing. The symmetry
+    is only recorded here -- it is applied later, during canonicalization.
     """
-    return Expression.identity()
+    name: str
+    indices: Tuple[str, ...]
+    symmetry: Tuple = field(default=(), compare=False)
+
+    def relabel_indices(self, rep):
+        """Return a copy with each index relabelled through ``rep``.
+
+        Parameters
+        ----------
+        rep : dict
+            Maps each original label to its class representative. Labels absent
+            from it are left unchanged.
+
+        Returns
+        -------
+        Integral
+            A copy with indices relabelled and the symmetry preserved.
+        """
+        return Integral(
+            self.name,
+            tuple(rep.get(i, i) for i in self.indices),
+            self.symmetry,
+        )
+
+    def __repr__(self):
+        return f"{self.name}({','.join(self.indices)})"
 
 
-def bra_singles(i="i", a="a"):
-    """The singly-excited bra <Phi_i^a| = <Phi_0| a_i^ a_a (no tensor)."""
-    return Expression.single(block([cre(i, "occ"), ann(a, "virt")]), Fraction(1))
+@dataclass(frozen=True)
+class OperatorBlock:
+    """An operator string together with its factor.
 
-
-def ket_singles(i="i", a="a"):
-    """The singly-excited ket |Phi_i^a> = a_a^ a_i |Phi_0> (no tensor)."""
-    return Expression.single(block([cre(a, "virt"), ann(i, "occ")]), Fraction(1))
-
-
-def bra_doubles(i="i", j="j", a="a", b="b"):
-    """The doubly-excited bra <Phi_ij^ab| = <Phi_0| a_i^ a_j^ a_b a_a."""
-    return Expression.single(
-        block([cre(i, "occ"), cre(j, "occ"), ann(b, "virt"), ann(a, "virt")]),
-        Fraction(1),
-    )
-
-
-def ket_doubles(i="i", j="j", a="a", b="b"):
-    """The doubly-excited ket |Phi_ij^ab> = a_a^ a_b^ a_j a_i |Phi_0>."""
-    return Expression.single(
-        block([cre(a, "virt"), cre(b, "virt"), ann(j, "occ"), ann(i, "occ")]),
-        Fraction(1),
-    )
-
-
-# --- orbital rotation operator ------------------------------------------------
-
-def kappa(name="kappa", p="p", q="q"):
-    """The orbital rotation operator kappa_pq (a_p^ a_q - a_q^ a_p).
-
-    Written in the explicit antisymmetric TWO-TERM form E_pq^- dressed with the
-    rotation amplitude kappa_pq: the antisymmetry lives in the two operator
-    strings themselves, not in a tensor annotation. Both terms carry the SAME
-    amplitude ``kappa_pq`` (the second with a minus sign), so this is exactly
-    kappa_pq E_pq^-. Summed over p > q it is the full orbital-rotation generator;
-    here a single (p, q) pair is returned and the caller supplies the labels.
-
-    It is used inside commutators for orbital response, e.g. [H_N, kappa].
+    Attributes
+    ----------
+    ops : tuple of Operator
+        The block's operators. They are re-stamped with a fresh group tag when
+        contracted, so a policy can tell which operators shared a block. Whether
+        operators within a block may contract with one another is up to the
+        contraction policy, not the block itself: the default
+        ``normal_ordered_blocks`` forbids it, so the block behaves as a
+        normal-ordered {..}, while ``contract_all`` permits it.
+    integral : Integral, optional
+        The factor multiplying the block, or None for a bare block such as a
+        projection manifold that carries no factor of its own.
     """
-    amp = Tensor(name, (p, q))
-    return (
-        Expression.single(block([cre(p, "gen"), ann(q, "gen")], amp), Fraction(1))
-        - Expression.single(block([cre(q, "gen"), ann(p, "gen")], amp), Fraction(1))
-    )
+    ops: Tuple[Operator, ...]
+    integral: Optional[Integral] = None
+
+
+def block(ops, integral=None):
+    """Build an ``OperatorBlock`` from a list of operators.
+
+    Parameters
+    ----------
+    ops : list of Operator
+        The operators forming the block.
+    integral : Integral, optional
+        The factor, or None for a bare block.
+
+    Returns
+    -------
+    OperatorBlock
+    """
+    return OperatorBlock(tuple(ops), integral)

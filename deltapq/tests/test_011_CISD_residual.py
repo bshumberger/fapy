@@ -19,7 +19,7 @@ labels the projection fixes, so nothing collides.
 
 from fractions import Fraction
 
-from deltapq import Problem, operators as op
+from deltapq import Problem, operator_library as op
 from deltapq.tests.utils import term_multiset
 
 
@@ -78,5 +78,5 @@ def test_cisd_doubles_residual():
     assert len(sigma) == 19
 
     # The <ab||ij> driver term is present with unit coefficient and no amplitude.
-    driver = [t for t in sigma if [x.name for x in t.tensors] == ["g"]]
+    driver = [t for t in sigma if [x.name for x in t.integrals] == ["g"]]
     assert len(driver) == 1 and driver[0].coefficient == Fraction(1)
