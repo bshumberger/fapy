@@ -18,7 +18,7 @@ An input file therefore reads like a short problem statement:
     energy = Problem(
         name = "MP2 energy",
         bra  = op.reference(),
-        expr = op.V_N * op.doubles("t"),
+        expr = op.V_N * op.doubles("t", "i", "j", "a", "b"),
         ket  = op.reference(),
     )
     energy.report()
@@ -57,13 +57,17 @@ class Problem:
     ``expr`` is the operator expression to sandwich; ``bra`` and ``ket`` are
     projection manifolds (default to the reference determinant, giving an energy).
     ``externals`` is normally left as None and inferred from the manifolds, but
-    can be given explicitly to override that inference.
+    can be given explicitly to override that inference. ``symmetry`` is the reality
+    of the orbitals, defaulting to the general ``"complex"`` (Hermitian) case;
+    pass ``"real"`` to exploit the Hermiticity symmetries that hold only for real
+    orbitals (f_pq = f_qp and <pq||rs> = <rs||pq>).
     """
     name: str
     expr: Expression
     bra: Expression = field(default_factory=Expression.identity)
     ket: Expression = field(default_factory=Expression.identity)
     externals: tuple = None
+    symmetry: str = "complex"
 
     def external_indices(self):
         """Return the external index labels, inferred from bra/ket unless given.
@@ -86,7 +90,9 @@ class Problem:
         then canonicalized with the external indices held fixed.
         """
         raw = (self.bra * self.expr * self.ket).vev()
-        return canonicalize(raw, externals=self.external_indices())
+        return canonicalize(
+            raw, externals=self.external_indices(), symmetry=self.symmetry
+        )
 
     def report(self, stream=None):
         """Derive the problem and print it as ``name: <collected equation>``.

@@ -18,6 +18,29 @@ against MP2/CISD/CCSD energies and the MP2 amplitude numerator.
 
 ---
 
+## Priority rule: physical/mathematical cleanliness
+
+**Everything in this package must be physically and/or mathematically clean.**
+This is the top priority, above convenience, brevity, or making a test pass. A
+representation is acceptable only if it is *correct as physics/math*, not merely
+if the engine happens to produce the expected number under some bookkeeping.
+
+- Do not defend a construction by appeal to what the code currently does (an
+  implementation artifact); justify it from the physics or the math. If the two
+  disagree, the physics/math wins and the code changes.
+- Prefer the representation that *is* the physical object over one that only
+  reproduces its numbers. Example: the orbital rotation operator `kappa` is the
+  true antisymmetric generator `sum_{p>q} kappa_pq E_pq^-`, built as
+  `(1/2) kappa_pq (a_p^ a_q - a_q^ a_p)` with `kappa_pq` annotated antisymmetric —
+  the `1/2` and the antisymmetry together make `(1/2) sum_{all p,q} = sum_{p>q}`.
+  A prefactor-1, un-annotated form that reads the right per-element number was
+  rejected precisely because it was clean *in code*, not in math.
+- Work the math out (or ask the user to) before encoding it. Verify the engine
+  reproduces the hand result; if a test must change, change it to the physically
+  correct value, not to whatever the engine emitted.
+
+---
+
 ## Reference documents (authoritative for conventions)
 
 Keep these in the repo. When a convention question arises, these win over
@@ -199,18 +222,34 @@ Canonicalize by applying the symmetry group, tracking sign flips from
 antisymmetric swaps, taking the lexicographically smallest form as a dict key,
 and summing coefficients. Do **not** attempt pairwise equivalence detection.
 
-**The Fock matrix `f_pq` carries NO index symmetry — intentionally.** `f_pq = f_qp`
-holds only for a *real* Fock matrix. For a **complex Hermitian** Fock (e.g. a
-finite-difference calculation with an explicit magnetic field, unrelaxed),
-`f_pq = f_qp^*` and the two orderings are *different numbers*, so the `p<->q`
-ordering the contraction produces must be preserved. The contraction already
-emits the physically correct order (e.g. `f_ab c_i^b`, `a` first); a symmetry
-annotation would canonicalize it to `f_ba` and silently corrupt the complex case.
-The antisymmetrized integral `<pq||rs>` has the same exposure (its antisymmetry is
-exact only for real orbitals); making all tensor symmetries **declarable per run**
-(real/symmetric vs complex/Hermitian) is the general fix — see the symmetry
-cleanup under Generality. Removed from both the `Integral` annotation on `F_N`
-(`operator_library.py`) and the name-table fallback (`canonicalize.py`).
+**Tensor symmetry is declared per run** — `canonicalize(..., symmetry=...)`, also
+a field on `Problem`, with `"complex"` the **default** (the general case) and
+`"real"` an opt-in. The split is:
+
+- **Definitional (mode-independent) symmetry** follows from relabelling the summed
+  particle coordinates, so it holds for real *and* complex orbitals. This is the
+  `p<->q` / `r<->s` antisymmetry of `<pq||rs>` and the `i<->j` / `a<->b`
+  antisymmetry of the amplitudes. It is stamped structurally on the `Integral`
+  (`_INTEGRAL_SYM`, `_DOUBLES_SYM` in `operator_library.py`) and mirrored in the
+  name-table fallback (`_SYMMETRY_GENERATORS` in `canonicalize.py`).
+- **Hermiticity (mode-dependent) symmetry** holds only for a *real* Hamiltonian:
+  `f_pq = f_qp` and the pair-exchange `<pq||rs> = <rs||pq>`. For a **complex
+  Hermitian** case (e.g. an explicit magnetic field, unrelaxed) these become
+  `f_pq = f_qp^*` and `<pq||rs> = <rs||pq>^*` — the two orderings are *different
+  numbers* (complex conjugates), so canonicalizing them together corrupts the
+  complex case. These live in `_HERMITIAN_SYMMETRY` (`canonicalize.py`), keyed by
+  mode, and are added by tensor name only in `"real"` mode; `"complex"` adds
+  nothing, preserving the order the contraction emits (e.g. `f_ab c_i^b`, `a`
+  first).
+
+Note the physics: it is the **pair-exchange** symmetry of `<pq||rs>` that is
+real-only, *not* its antisymmetry (an earlier note said "antisymmetry" — wrong).
+So the two-electron integral is 8-fold in `"real"`, 4-fold in `"complex"`; `f` is
+symmetric in `"real"`, bare in `"complex"`. The validated MP2/CISD/CCSD results
+are real-orbital methods, but their current test assertions do not depend on the
+pair-exchange collapse, so they pass under the `"complex"` default unchanged; pass
+`symmetry="real"` when a derivation's collection genuinely needs the real-only
+symmetries.
 
 ### First validation target
 ```
@@ -279,7 +318,7 @@ from deltapq import Problem, operators as op
 Problem(
     name = "MP2 energy",
     bra  = op.reference(),            # <Phi_0|   (op.bra_doubles(...) for a projection)
-    expr = op.V_N * op.doubles("t"),  # the operator expression — the "problem"
+    expr = op.V_N * op.doubles("t", "i", "j", "a", "b"),  # the operator expression — the "problem"
     ket  = op.reference(),            # |Phi_0>
 ).report()
 ```
@@ -292,9 +331,10 @@ Problem(
   - `singles_dagger(name)`/`doubles_dagger(name)` — the de-excitation adjoints
     (`C†`, `Λ`), carrying amplitudes, for bra-side sandwiches such as
     `<0| C2† H_N C2 |0>`. Give bra/ket amplitudes **distinct names** in a sandwich;
-  - `kappa(name, p, q)` — the orbital rotation operator, the explicit antisymmetric
-    two-term form `κ_pq(a_p^ a_q − a_q^ a_p)`, for orbital-response commutators
-    like `[H_N, κ]`;
+  - `kappa(name, p, q)` — the orbital rotation generator `Σ_{p>q} κ_pq E_pq^-`,
+    built as `(1/2) κ_pq(a_p^ a_q − a_q^ a_p)` with `κ_pq` annotated antisymmetric
+    (the `1/2` + antisymmetry make it the true generator, not twice it), for
+    orbital-response commutators like `[H_N, κ]`;
 - `bra`/`ket` are projection manifolds; their labels are the **external**
   indices, inferred automatically (override via `externals=`).
 - `Problem.derive()` returns collected `CanonicalTerm`s; `.report()` prints them.

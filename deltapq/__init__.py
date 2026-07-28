@@ -34,7 +34,13 @@ from .expression import (
     left_nested_commutator,
     right_nested_commutator,
 )
-from .canonicalize import CanonicalTerm, canonicalize, canonical_tensor, format_canonical
+from .canonicalize import (
+    Symmetry,
+    CanonicalTerm,
+    canonicalize,
+    canonical_tensor,
+    format_canonical,
+)
 from .problem import Problem
 from . import operator_library
 
@@ -67,6 +73,7 @@ __all__ = [
     "commutator",
     "left_nested_commutator",
     "right_nested_commutator",
+    "Symmetry",
     "CanonicalTerm",
     "canonicalize",
     "canonical_tensor",

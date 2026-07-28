@@ -23,7 +23,7 @@ from deltapq import Problem, canonicalize, operator_library as ops
 def test_commutator_expands_to_ab_minus_ba():
     """[A, B] produces exactly two terms: +A*B and -B*A with swapped blocks."""
     a = ops.F_N
-    b = ops.doubles("t2")
+    b = ops.doubles("t2", "i", "j", "a", "b")
     comm = commutator(a, b)
 
     # A and B are each a single term, so the commutator has two: the AB ordering
@@ -102,8 +102,10 @@ def test_jacobi_identity_vanishes():
 
 def test_commutator_as_a_problem_expression():
     """A commutator can be the expr of a Problem: <0|[H_N, kappa]|0> is the gradient."""
-    # The orbital gradient -f_ia kappa_ia + f_ai kappa_ai, evaluated through the
-    # Problem path rather than by calling vev directly.
+    # The orbital gradient -1/2 (f_ia + f_ai) kappa_ia, evaluated through the
+    # Problem path rather than by calling vev directly. In the default complex mode
+    # the two Fock orderings stay distinct, so it appears as two -1/2 terms, both
+    # carrying the single folded amplitude kappa_ia.
     sigma = Problem(
         name="orbital gradient",
         bra=ops.reference(),
@@ -114,7 +116,7 @@ def test_commutator_as_a_problem_expression():
     summary = {
         (t.coefficient, tuple(sorted(x.name for x in t.integrals))) for t in sigma
     }
-    assert summary == {(Fraction(1), ("f", "k")), (Fraction(-1), ("f", "k"))}
+    assert summary == {(Fraction(-1, 2), ("f", "k"))}
     assert len(sigma) == 2
 
 
@@ -148,7 +150,7 @@ def test_v_n_with_t2_is_nonzero_and_carries_both_tensors():
     integral g and the amplitude t2, with the clean value deferred to the method
     stage (which needs canonicalization).
     """
-    terms = (ops.V_N * ops.doubles("t2")).vev()
+    terms = (ops.V_N * ops.doubles("t2", "i", "j", "a", "b")).vev()
 
     assert len(terms) > 0
     for term in terms:
@@ -167,7 +169,7 @@ def test_reversed_annihilator_ordering_in_v_and_doubles():
     assert v_labels == [("p", True), ("q", True), ("s", False), ("r", False)]
 
     # doubles: creators on (a, b), annihilators on (j, i) -- i.e. a_j a_i, reversed.
-    (t_term,) = ops.doubles("t2").terms
+    (t_term,) = ops.doubles("t2", "i", "j", "a", "b").terms
     (t_block,) = t_term.blocks
     t_labels = [(o.label, o.dagger) for o in t_block.ops]
     assert t_labels == [("a", True), ("b", True), ("j", False), ("i", False)]

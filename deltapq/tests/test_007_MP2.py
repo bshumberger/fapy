@@ -18,7 +18,7 @@ def test_mp2_energy_is_quarter_integral_amplitude():
     energy = Problem(
         name="MP2 energy",
         bra=op.reference(),
-        expr=op.V_N * op.doubles("t"),
+        expr=op.V_N * op.doubles("t", "i", "j", "a", "b"),
         ket=op.reference(),
     )
     terms = energy.derive()

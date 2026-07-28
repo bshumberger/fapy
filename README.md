@@ -35,7 +35,7 @@ from deltapq import Problem, operators as op
 Problem(
     name = "MP2 energy",
     bra  = op.reference(),
-    expr = op.V_N * op.doubles("t"),
+    expr = op.V_N * op.doubles("t", "i", "j", "a", "b"),
     ket  = op.reference(),
 ).report()
 # MP2 energy: 1/4 g(O0,O1,V0,V1) t(O0,O1,V0,V1)

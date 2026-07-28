@@ -24,7 +24,11 @@ def test_ccsd_energy_terms():
     energy = Problem(
         name="CCSD energy",
         bra=op.reference(),
-        expr=op.H_N * (op.singles("t") + op.doubles("t") + Fraction(1, 2) * t1_squared),
+        expr=op.H_N * (
+            op.singles("t", "i", "a")
+            + op.doubles("t", "i", "j", "a", "b")
+            + Fraction(1, 2) * t1_squared
+        ),
         ket=op.reference(),
     )
     terms = energy.derive()

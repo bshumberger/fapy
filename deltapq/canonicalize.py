@@ -28,27 +28,34 @@ symmetry may still move them between slots.
 from dataclasses import dataclass, field
 from fractions import Fraction
 from itertools import permutations
+from typing import Literal
 
 from .operators import Integral
+
+# Reality of the orbitals for a run: "real" gives symmetric/Hermitian integrals
+# their full index symmetry; "complex" (Hermitian, e.g. an explicit magnetic
+# field) drops the symmetries that hold only for real orbitals.
+Symmetry = Literal["real", "complex"]
 
 
 # --- tensor permutational symmetry -------------------------------------------
 
-# Each tensor name maps to a list of GENERATOR symmetries, written as
-# (permutation, sign): applying the permutation to the index tuple multiplies the
-# term by the sign. The full symmetry group is generated from these by closure.
-# A name absent from this table has only the trivial (identity) symmetry. This
-# table is only a FALLBACK: tensors built by the operator library carry their own
-# symmetry annotation (see ``operators.py``), which is preferred so that a user
-# may name an amplitude anything. The table still serves hand-built tensors (in
-# tests, say) that were created without an explicit symmetry.
+# Definitional (mode-independent) symmetry. Each tensor name maps to a list of
+# GENERATOR symmetries, written as (permutation, sign): applying the permutation
+# to the index tuple multiplies the term by the sign. The full symmetry group is
+# generated from these by closure. A name absent from this table has only the
+# trivial (identity) symmetry. This table is only a FALLBACK: tensors built by the
+# operator library carry their own symmetry annotation (see ``operators.py``),
+# which is preferred so that a user may name an amplitude anything. The table
+# still serves hand-built tensors (in tests, say) created without an annotation.
+#
+# These symmetries follow from relabelling the summed particle coordinates, so
+# they hold whether the orbitals are real or complex. The Hermiticity symmetries
+# that hold only for real orbitals live in _HERMITIAN_SYMMETRY below.
 _SYMMETRY_GENERATORS = {
-    # NOTE: the Fock matrix f_pq is intentionally absent. It is symmetric only for
-    # a real Fock matrix; for a complex Hermitian Fock (magnetic field, unrelaxed)
-    # f_pq =/= f_qp, so the contraction's index ordering must be preserved.
     # Antisymmetrized two-electron integral <pq||rs>: antisymmetric in p<->q and
-    # in r<->s, symmetric under exchange of the bra and ket pairs (pq)<->(rs).
-    "g": [((1, 0, 2, 3), -1), ((0, 1, 3, 2), -1), ((2, 3, 0, 1), +1)],
+    # in r<->s. The pair-exchange (pq)<->(rs) symmetry is Hermiticity, real only.
+    "g": [((1, 0, 2, 3), -1), ((0, 1, 3, 2), -1)],
     # Doubles amplitudes t_ij^ab / c_ij^ab: antisymmetric in i<->j and in a<->b.
     "t2": [((1, 0, 2, 3), -1), ((0, 1, 3, 2), -1)],
     "c2": [((1, 0, 2, 3), -1), ((0, 1, 3, 2), -1)],
@@ -56,17 +63,40 @@ _SYMMETRY_GENERATORS = {
 }
 
 
-def _tensor_generators(tensor):
-    """Return the symmetry generators to use for ``tensor``.
+# Hermiticity (mode-dependent) symmetry, added on top of the definitional set for
+# a given run. These relations are exact only for a real Hamiltonian: for a
+# complex Hermitian one (e.g. an explicit magnetic field, unrelaxed) the two
+# orderings are complex conjugates -- distinct numbers -- so "complex" adds
+# nothing and the ordering the contraction produced is preserved. Keyed by mode,
+# then by tensor name.
+_HERMITIAN_SYMMETRY = {
+    # Real orbitals: f_pq = f_qp, and <pq||rs> = <rs||pq> (bra-ket pair exchange).
+    "real": {
+        "f": [((1, 0), +1)],
+        "g": [((2, 3, 0, 1), +1)],
+    },
+    # Complex Hermitian orbitals: no extra symmetry beyond the definitional set.
+    "complex": {},
+}
 
-    The tensor's own annotation wins if it has one, so amplitudes and integrals
-    built by the operator library carry their antisymmetry regardless of name.
-    Only when a tensor was built with no annotation do we fall back to the
-    name-keyed table above.
+
+def _tensor_generators(tensor, symmetry):
+    """Return the symmetry generators to use for ``tensor`` under a run mode.
+
+    Two sources are combined. The definitional (mode-independent) symmetry comes
+    from the tensor's own annotation if it has one -- so amplitudes and integrals
+    built by the operator library carry their antisymmetry regardless of name --
+    or from the name-keyed fallback table for hand-built tensors. On top of that,
+    the Hermiticity symmetry for the run ``symmetry`` mode is added by name: real
+    orbitals give f_pq = f_qp and the pair-exchange of <pq||rs>, while complex
+    Hermitian adds nothing.
     """
-    if tensor.symmetry:
-        return tensor.symmetry
-    return _SYMMETRY_GENERATORS.get(tensor.name, [])
+    definitional = (
+        list(tensor.symmetry) if tensor.symmetry
+        else list(_SYMMETRY_GENERATORS.get(tensor.name, []))
+    )
+    hermitian = _HERMITIAN_SYMMETRY.get(symmetry, {}).get(tensor.name, [])
+    return definitional + list(hermitian)
 
 
 def _symmetry_orbit(generators, indices):
@@ -93,16 +123,17 @@ def _symmetry_orbit(generators, indices):
         yield idx, sign
 
 
-def canonical_tensor(tensor):
+def canonical_tensor(tensor, symmetry="complex"):
     """Reduce a tensor to its lexicographically smallest symmetric arrangement.
 
     Among all index orderings the tensor's symmetry permits, we pick the smallest
     tuple and return it together with the sign picked up getting there. This is
     the per-tensor half of canonicalization; the dummy renaming around it is what
     makes two whole terms comparable. The reduced tensor keeps the original's
-    symmetry annotation.
+    symmetry annotation. ``symmetry`` selects the run mode -- see
+    ``_tensor_generators`` -- and defaults to the general ``"complex"`` case.
     """
-    generators = _tensor_generators(tensor)
+    generators = _tensor_generators(tensor, symmetry)
     best_idx = None
     best_sign = 1
     for idx, sign in _symmetry_orbit(generators, tensor.indices):
@@ -147,7 +178,7 @@ def _dummy_labels(term, external_set):
     return sorted(occ), sorted(virt)
 
 
-def canonicalize_term(term, external_set, external_spaces):
+def canonicalize_term(term, external_set, external_spaces, symmetry="complex"):
     """Return the canonical key, overall sign, and index spaces of one term.
 
     We try every way of renaming the occupied dummies onto canonical occupied
@@ -155,6 +186,7 @@ def canonicalize_term(term, external_set, external_spaces):
     indices untouched. For each renaming the tensors are individually reduced to
     their smallest symmetric arrangement and then sorted (the product is
     commutative), giving a candidate key and sign. The smallest key wins.
+    ``symmetry`` selects the run mode used to reduce each tensor.
     """
     occ_dummies, virt_dummies = _dummy_labels(term, external_set)
     occ_slots = [f"O{k}" for k in range(len(occ_dummies))]
@@ -175,7 +207,7 @@ def canonicalize_term(term, external_set, external_spaces):
                 # Relabel through the dummy map while carrying the tensor's own
                 # symmetry annotation along, so the reduction below still knows it.
                 renamed = tensor.relabel_indices(rename)
-                reduced, s = canonical_tensor(renamed)
+                reduced, s = canonical_tensor(renamed, symmetry)
                 sign *= s
                 canon.append((reduced.name, reduced.indices))
             canon.sort()
@@ -200,13 +232,19 @@ def canonicalize_term(term, external_set, external_spaces):
 
 # --- the collector ------------------------------------------------------------
 
-def canonicalize(terms, externals=()):
+def canonicalize(terms, externals=(), symmetry="complex"):
     """Canonicalize and collect a list of ``Term``s into ``CanonicalTerm``s.
 
     Each term is reduced to its canonical key and the (sign-adjusted) coefficient
     is added into a running total for that key. Keys whose coefficients cancel to
     zero are dropped, and the survivors are returned sorted for a stable,
     reproducible ordering.
+
+    ``symmetry`` selects the reality of the orbitals and defaults to the general
+    ``"complex"`` (Hermitian) case, in which only the mode-independent tensor
+    symmetries are exploited. Pass ``"real"`` to additionally collect terms under
+    the Hermiticity symmetries f_pq = f_qp and <pq||rs> = <rs||pq>, exact only for
+    real orbitals.
     """
     external_set = set(externals)
 
@@ -220,7 +258,9 @@ def canonicalize(terms, externals=()):
     totals = {}
     spaces_by_key = {}
     for term in terms:
-        key, sign, spaces = canonicalize_term(term, external_set, external_spaces)
+        key, sign, spaces = canonicalize_term(
+            term, external_set, external_spaces, symmetry
+        )
         totals[key] = totals.get(key, Fraction(0)) + term.coefficient * sign
         spaces_by_key[key] = spaces
 

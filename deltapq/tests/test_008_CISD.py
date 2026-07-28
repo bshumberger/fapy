@@ -20,7 +20,7 @@ def test_cisd_energy_terms():
     energy = Problem(
         name="CISD energy",
         bra=op.reference(),
-        expr=op.H_N * (op.singles("c") + op.doubles("c")),
+        expr=op.H_N * (op.singles("c", "i", "a") + op.doubles("c", "i", "j", "a", "b")),
         ket=op.reference(),
     )
     terms = energy.derive()

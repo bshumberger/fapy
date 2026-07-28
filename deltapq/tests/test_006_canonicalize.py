@@ -55,7 +55,7 @@ def test_v_t2_collects_to_quarter_integral_amplitude():
     The raw contraction produces several terms differing only by dummy names and
     integral/amplitude antisymmetry; canonicalization must fold them into one.
     """
-    collected = canonicalize((ops.V_N * ops.doubles("t2")).vev())
+    collected = canonicalize((ops.V_N * ops.doubles("t2", "i", "j", "a", "b")).vev())
 
     assert len(collected) == 1
     term = collected[0]
@@ -70,7 +70,7 @@ def test_f_t1_collects_to_single_fock_amplitude_term():
     coefficient for the singles-Fock contribution is 1; the 1/2 belongs to the
     T1-squared term instead.)
     """
-    collected = canonicalize((ops.F_N * ops.singles("t1")).vev())
+    collected = canonicalize((ops.F_N * ops.singles("t1", "i", "a")).vev())
 
     assert len(collected) == 1
     assert collected[0].coefficient == Fraction(1)
