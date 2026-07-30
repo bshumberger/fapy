@@ -337,6 +337,28 @@ Problem(
     orbital-response commutators like `[H_N, κ]`;
 - `bra`/`ket` are projection manifolds; their labels are the **external**
   indices, inferred automatically (override via `externals=`).
+- **Externals vs summed is the `bra`/`ket`-vs-`expr` split.** A `Problem` has one
+  `bra`, one `expr`, one `ket` — so its externals are unambiguous: the labels the
+  bra/ket manifolds carry (`external_indices()` = union of both). `expr` operators
+  (`V_N`, `T2`, `Λ2`, …) are **summed**; the bare projection manifolds in `bra`/`ket`
+  are **external**. To represent a matrix element with non-reference bra/ket, fold
+  the *amplitude-carrying* operators into `expr` (e.g. `⟨Φ_ij^ab|F_N|Φ_kl^cd⟩` →
+  `⟨0| Λ2 · F_N · T2 |0⟩`) but keep the *bare projection* in `bra`/`ket` — that slot
+  is how externals are declared. One `Problem` = one tensor = one external set;
+  terms with different externals are different tensors (different problems). This
+  is sufficient for EOM-CC (sigma-vector form) and gradient/Hessian work; genuine
+  per-term `⟨bra|…|ket⟩` sums are never needed because they don't fold to one tensor.
+- **Externals are threaded through the whole pipeline** (`derive` → `Expression.vev`
+  → `contract_blocks` → `resolve_term`), not just canonicalization. Resolution now
+  picks class representatives **external-first** (external > concretely-spaced >
+  smallest-label), so a projection's index survives and a summed dummy is renamed
+  onto it. Before this, resolution used only lexical order and could rename an
+  external away when it contracted with a lexically-smaller dummy (silently
+  zeroing terms, e.g. `⟨0|C2†|Φ_kl^cd⟩`). Regression: `test_003` (unit) and
+  `test_010` (Problem level, lexically-large externals).
+- **Library index labels are required, not defaulted.** `singles`/`doubles`/
+  `singles_dagger`/`doubles_dagger`/`bra_*`/`ket_*`/`kappa` all take explicit index
+  arguments (no defaults) so a repeated operator can't silently collide dummies.
 - `Problem.derive()` returns collected `CanonicalTerm`s; `.report()` prints them.
 - The user does any **BCH / `exp(T)` expansion by hand** and hands the engine the
   resulting expression; `left_nested_commutator(H, T, T, ...)` transcribes
@@ -376,6 +398,13 @@ keeps the general `f_ov` (Brillouin) terms that Eq. 27 drops at canonical HF;
   policies composable, most likely a **per-block / block-aware `may_contract`**
   so a product can apply the right rule to each block's operators (ties to
   Generality constraint #1). **Revisit this.**
+- **Surviving Kronecker deltas between two externals.** Resolution *spends* every
+  delta. When a delta identifies two **external** indices (e.g. `δ_ik` with `i`
+  from the bra and `k` from the ket), it can't be spent — both must survive — so it
+  should be **emitted as an explicit `δ` in the output**. Not built. Only needed for
+  an explicit two-sided matrix element `⟨Φ_μ|H̄|Φ_ν⟩` with externals on both sides
+  (an EOM Jacobian); the sigma-vector EOM form (`⟨Φ_μ|H̄R|0⟩`) and the Hessian avoid
+  it, so it's orthogonal to the externals-through-resolution fix.
 - `exp(T)` / BCH truncation as a built-in; LaTeX output.
 
 ---
@@ -415,6 +444,14 @@ Model on the sibling **`apyib`** package. This replaces the earlier
 - Comments are **purposeful, not line-by-line narration**. No Sphinx roles
   (`:func:`, `:class:`, `#:`) — plain prose.
 - `snake_case` functions, `PascalCase` classes (standard Python).
+- **This pass is complete package-wide** — every module (`operators`, `expression`,
+  `operator_library`, `contraction`, `policy`, `resolve`, `wick`, `canonicalize`,
+  `problem`) is on this style. Match it for new code; don't re-narrate.
+- **`README.md` has an end-to-end pipeline walkthrough** ("From input to output"):
+  the **build phase** as nested *types* (`Problem ⊃ Expression ⊃ ExprTerm ⊃
+  OperatorBlock ⊃ {Operator, Integral}`) and the **evaluation phase** as nested
+  *calls* (the `report → derive → vev/canonicalize → …` tree), each with a per-file
+  surface list. Read it to reorient on where things live.
 
 ### Naming
 - Names should be **descriptive and convey the physics**. Renames made this way:
