@@ -1,29 +1,16 @@
-"""
-Contraction policies: the rule that decides WHICH pairs of operators are even
-eligible to be contracted, kept separate from the elementary rule that decides
-whether an eligible pair contracts to a nonzero delta.
-
-Why split these apart? The original driver hardwired one rule -- "operators from
-the same normal-ordered {..} block never contract" -- into the group check. That
-is exactly right for the generalized Wick theorem, but it is only ONE possible
-rule. Objects like the orbital-rotation operator ``kappa`` are not normal-ordered
-blocks at all, so "which pairs may contract" must become a supplied policy rather
-than a baked-in assumption. A policy is any callable
-
-    may_contract(op_a, op_b) -> bool
-
-that returns True when the left operator ``op_a`` and the right operator ``op_b``
-are ALLOWED to form a contracted pair. The elementary contraction rule in
-``contraction.py`` still has the final say on whether an allowed pair is actually
-nonzero; the policy only prunes structurally forbidden pairings first.
-"""
+"""Contains the contraction policies -- the rule for which operator pairs are eligible to contract, kept separate from the elementary rule for whether a pair is nonzero."""
 
 from typing import Callable
 
 from .operators import Operator
 
-# A contraction policy is a callable on the left/right operators of a candidate
-# pair. Naming the type keeps the driver signature readable and documents intent.
+# A contraction policy is a callable may_contract(op_a, op_b) -> bool on the
+# left/right operators of a candidate pair, returning True when they are ALLOWED
+# to contract. It runs before -- and is kept separate from -- the elementary rule
+# in contraction.py, which has the final say on whether an allowed pair is
+# nonzero. Making it a supplied policy rather than a baked-in "same block never
+# contracts" check lets a string that is not a set of pre-normal-ordered blocks
+# declare its own rule (see contract_all).
 ContractionPolicy = Callable[[Operator, Operator], bool]
 
 
@@ -32,9 +19,22 @@ ContractionPolicy = Callable[[Operator, Operator], bool]
 def normal_ordered_blocks(a: Operator, b: Operator) -> bool:
     """Generalized Wick theorem: forbid contractions inside one {..} block.
 
-    Two operators that came out of the same normal-ordered block carry the same
-    group tag and are already normal-ordered with respect to each other, so they
-    must never contract. Operators from different blocks are free to.
+    Parameters
+    ----------
+    a, b : Operator
+        The left and right operators of a candidate pair.
+
+    Returns
+    -------
+    bool
+        True when the two came from different blocks (may contract), False when
+        they share a block.
+
+    Notes
+    -----
+    Operators from the same normal-ordered block carry the same group tag and are
+    already normal-ordered with respect to each other, so they must never contract;
+    operators from different blocks are free to.
     """
     return a.group != b.group
 
@@ -42,8 +42,21 @@ def normal_ordered_blocks(a: Operator, b: Operator) -> bool:
 def contract_all(a: Operator, b: Operator) -> bool:
     """No structural restriction: every pair is eligible to contract.
 
-    This corresponds to normal-ordering a single raw string, where there are no
-    pre-normal-ordered blocks to protect. The elementary rule alone then decides
+    Parameters
+    ----------
+    a, b : Operator
+        The left and right operators of a candidate pair (unused; every pair is
+        allowed).
+
+    Returns
+    -------
+    bool
+        Always True.
+
+    Notes
+    -----
+    Corresponds to normal-ordering a single raw string, where there are no
+    pre-normal-ordered blocks to protect, so the elementary rule alone decides
     which pairings survive.
     """
     return True

@@ -1,21 +1,4 @@
-"""
-The elementary contraction rule in the Fermi vacuum plus the combinatorics that
-a full contraction (vacuum expectation value) is built from.
-
-Elementary contraction rules (notes, "The Quasi-Particle Picture", the four
-contraction equations):
-
-    {a_p^  a_q^ }  = 0            (two creators)
-    {a_p   a_q  }  = 0            (two annihilators)
-    <a_i^  a_j > = delta_ij      hole line     (occupied; creator LEFT of annihilator)
-    <a_a   a_b^> = delta_ab      particle line (virtual;  annihilator LEFT of creator)
-
-Only these two survive; everything else (including creator-creator and
-annihilator-annihilator) is zero. ORDER MATTERS: ``contraction(a, b)`` assumes
-``a`` sits to the LEFT of ``b`` in the string, so swapping the arguments turns a
-hole line into a particle line or gives zero. This asymmetry is physics, not an
-implementation detail.
-"""
+"""Contains the elementary Fermi-vacuum contraction rule and the matching combinatorics a full contraction is built from."""
 
 from typing import Optional
 
@@ -25,26 +8,45 @@ from .operators import Operator
 # --- elementary contraction in the Fermi vacuum -------------------------------
 
 def contraction(a: Operator, b: Operator) -> Optional[dict]:
-    """
-    Contraction <a b> with a to the LEFT of b in the string. None if zero, else
-        {"delta": (labelA, labelB), "space": "occ"|"virt"}.
+    """The elementary contraction <a b>, with a to the LEFT of b in the string.
 
-    The helper ``can_be`` decides whether an operator is allowed to play a
-    required role in one of the two nonzero rules. It must first have the right
-    dagger status (creator vs annihilator), and then either already live in the
-    required space or be a general index that is free to resolve into it.
+    Parameters
+    ----------
+    a, b : Operator
+        The two operators, in their left-to-right order in the string.
+
+    Returns
+    -------
+    dict or None
+        ``{"delta": (a.label, b.label), "space": "occ" | "virt"}`` for a surviving
+        contraction, or None when it vanishes.
+
+    Notes
+    -----
+    Only two contractions are nonzero (notes, "The Quasi-Particle Picture"):
+
+        <a_i^ a_j > = delta_ij   hole line     (occupied; creator LEFT of annihilator)
+        <a_a  a_b^> = delta_ab   particle line (virtual;  annihilator LEFT of creator)
+
+    Everything else -- two creators, two annihilators, or the wrong ordering --
+    vanishes. ORDER MATTERS: ``a`` is assumed to sit to the LEFT of ``b``, so
+    swapping the arguments turns a hole line into a particle line or gives zero;
+    this asymmetry is physics, not an implementation detail. The
+    ``matches_space_dagger`` helper decides whether an operator may play a required
+    role: it must have the right dagger status and either already live in the
+    required space or be a general index free to resolve into it.
     """
-    def can_be(op, needed_space, needed_dagger):
+    def matches_space_dagger(op, needed_space, needed_dagger):
         if op.dagger != needed_dagger:
             return False
         return op.space == needed_space or op.space == "gen"
 
     # Hole line: <a_i^ a_j> = delta_ij  (creator LEFT, annihilator RIGHT, occ)
-    if can_be(a, "occ", True) and can_be(b, "occ", False):
+    if matches_space_dagger(a, "occ", True) and matches_space_dagger(b, "occ", False):
         return {"delta": (a.label, b.label), "space": "occ"}
 
     # Particle line: <a_a a_b^> = delta_ab (annihilator LEFT, creator RIGHT, virt)
-    if can_be(a, "virt", False) and can_be(b, "virt", True):
+    if matches_space_dagger(a, "virt", False) and matches_space_dagger(b, "virt", True):
         return {"delta": (a.label, b.label), "space": "virt"}
 
     # Anything else -- two creators, two annihilators, or the wrong ordering --
@@ -55,54 +57,66 @@ def contraction(a: Operator, b: Operator) -> Optional[dict]:
 # --- combinatorics ------------------------------------------------------------
 
 def recursive_generator(indices):
+    """Yield every perfect matching (pairing) of the given positions.
+
+    Parameters
+    ----------
+    indices : list
+        The positions to pair up, e.g. ``list(range(2n))``.
+
+    Yields
+    ------
+    list of tuple
+        One perfect matching, as a list of ascending (lo, hi) position pairs. All
+        (2n-1)!! matchings are produced, with no duplicates.
+
+    Notes
+    -----
+    A recursive generator: the first position is paired with each remaining one in
+    turn, and the positions left over are matched by a recursive call, so the pairs
+    stack up until every position is covered. The base case (no positions) yields
+    the empty matching, which seeds the deepest level.
     """
-    This function is using a recursive generator to obtain all the possible
-    pairs from the given operator string. The general idea is that a pair is
-    created from the first index and some other index in 'rest'. A loop
-    involving the variable 'sub' is used to create other pairs in a recursive
-    fashion by calling the variable in the function. The variable will have a
-    certain depth it goes based on the number of times the function is called
-    in a recursive fashion. As such pairs stack on each other until all pairs
-    have been generated.
-    """
-    # Base case where all pairs have been generated.
+    # Base case: no positions left, so the only matching is the empty one.
     if not indices:
         yield []
         return
 
-    # Set the first index and rest indices for the loop to iterate over.
     first, rest = indices[0], indices[1:]
 
-    # Loop over the rest to create a pair.
+    # Pair the first position with each later one, then match what remains.
     for k in range(len(rest)):
         pair = (first, rest[k])
-
-        # Search for "sub" for a given depth of the generator. Note that
-        # the "sub" at the deepest level comes from the base case "yield".
-        # The "subs" for any depth higher than this are generated from the
-        # "yields" in the "for sub ..." loop.
         for sub in recursive_generator(rest[:k] + rest[k + 1:]):
             yield [pair] + sub
 
 
 def fermion_sign(pairs):
-    """
-    This function uses an ordering based algorithm to determine the sign of
-    a given permutation. Effectively, it tests if x > y when x is supposed to
-    be less than y. This is equivalent to a swapping based algorithm.
+    """The sign of the permutation that brings each contracted pair adjacent.
 
-    The sign reads POSITIONS only, never the operators themselves: it counts
-    the number of inversions needed to bring each contracted pair adjacent by
-    flattening the pair list and tallying how often a later position is smaller
-    than an earlier one.
+    Parameters
+    ----------
+    pairs : list of tuple
+        The contracted position pairs (i, j).
+
+    Returns
+    -------
+    int
+        +1 or -1, the parity of the permutation.
+
+    Notes
+    -----
+    Reads POSITIONS only, never the operators: the pair list is flattened and the
+    number of inversions (a later position smaller than an earlier one) is counted,
+    with an odd count flipping the sign. This is equivalent to tallying the adjacent
+    swaps needed to bring every pair together.
     """
-    # Create the string.
+    # Flatten the pairs into a single position sequence.
     order = []
     for (i, j) in pairs:
         order.extend([i, j])
 
-    # Set the initial sign, check the order of x and y, and change the sign
-    # as appropriate.
+    # An odd number of inversions in that sequence flips the sign.
     sign = 1
     for x in range(len(order)):
         for y in range(x + 1, len(order)):

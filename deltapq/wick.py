@@ -1,18 +1,4 @@
-"""
-The driver that ties the elementary contraction rule and the combinatorics
-together into a full contraction (Fermi-vacuum VEV) of an operator string,
-together with the generalized-Wick bookkeeping for pre-normal-ordered blocks
-and a small pretty-printer.
-
-Generalized Wick theorem for a product of normal-ordered groups:
-
-    { A B } { C D } { E F } ...
-
-Contractions are taken ONLY between operators in DIFFERENT groups; operators
-within the same { } are already normal-ordered and are never contracted with
-each other. Only fully contracted terms survive <Phi_0| ... |Phi_0>, so this
-computes the full contraction (VEV) over all such inter-group matchings.
-"""
+"""Contains the driver that ties the elementary contraction rule and the combinatorics into a full contraction (Fermi-vacuum VEV) of an operator string, plus the factor-aware contract_blocks and its Term output."""
 
 from dataclasses import dataclass, field
 from fractions import Fraction
@@ -26,60 +12,65 @@ from .resolve import declared_spaces, resolve_term
 # --- driver -------------------------------------------------------------------
 
 def wick_vev(ops, policy=normal_ordered_blocks):
-    """
-    Full contraction (Fermi-vacuum VEV) of a flat operator string.
+    """Full contraction (Fermi-vacuum VEV) of a flat operator string.
 
-    ``policy`` is a ``may_contract(op_a, op_b) -> bool`` callable deciding which
-    pairs are eligible to contract (see ``policy.py``). The default,
-    ``normal_ordered_blocks``, is the generalized Wick theorem: any pairing that
-    contracts two operators from the SAME group is discarded, so only inter-group
-    contractions contribute. Pass ``contract_all`` to contract everything (single
-    normal-ordering of one raw string).
+    Parameters
+    ----------
+    ops : list of Operator
+        The flat operator string, in left-to-right order.
+    policy : callable, optional
+        A ``may_contract(op_a, op_b) -> bool`` rule deciding which pairs are
+        eligible to contract (see ``policy.py``). The default
+        ``normal_ordered_blocks`` is the generalized Wick theorem: any pairing that
+        contracts two operators from the same group is discarded, so only
+        inter-group contractions contribute. ``contract_all`` contracts everything
+        (a single normal-ordering of one raw string).
 
-    Returns terms: [{"sign": +/-1, "deltas": [(la, lb, space), ...]}].
+    Returns
+    -------
+    list of dict
+        One entry per surviving full contraction,
+        ``{"sign": +/-1, "deltas": [(la, lb, space), ...]}``. Each delta records a
+        contracted pair as (left label, right label, "occ"|"virt"); the label order
+        follows the operators' left-to-right position in the string.
+
+    Notes
+    -----
+    Generalized Wick for a product of normal-ordered groups ``{A B}{C D}{E F}...``:
+    contractions are taken only between operators in different groups, since those
+    within one ``{ }`` are already normal-ordered with respect to each other. Only
+    fully contracted terms survive ``<Phi_0| ... |Phi_0>``, so this sums over every
+    inter-group perfect matching. An odd-length string has no full contraction.
     """
-    # Determine if there are an odd number of operators since full
-    # contractions are impossible if there are.
+    # A string with an odd number of operators has no full contraction.
     n = len(ops)
     if n % 2 == 1:
         return []
 
-    # Set up the output terms.
     terms = []
-
-    # Loop over the generator to get the pair strings.
     for pair_string in recursive_generator(list(range(n))):
-        # Set up the deltas we are going to collect.
         deltas = []
-
-        # Set the variable keeping the contraction alive.
         ok = True
-
-        # Loop over the pairs in the string.
         for (lo, hi) in pair_string:
-            # Make sure that the order is always left-to-right since the operator index is
-            # written left-to-right and the position index is left-to-right order.
+            # recursive_generator emits ascending pairs, so ops[lo] is always the
+            # left operator -- which both contraction() and the sign depend on.
             assert lo < hi, "Matching pairs must be ascending (left operator first)."
 
-            # Ask the policy whether this pair is even eligible to contract.
-            # The generalized-Wick default forbids pairs from the same block;
-            # other policies may allow or forbid pairs on different grounds.
+            # The policy prunes structurally ineligible pairs (the generalized-Wick
+            # default forbids block-mates); the elementary rule then decides whether
+            # an allowed pair is nonzero. One failed pair kills the whole matching.
             if not policy(ops[lo], ops[hi]):
                 ok = False
                 break
-
-            # Perform the contraction between the two operators.
             c = contraction(ops[lo], ops[hi])
             if c is None:
                 ok = False
                 break
 
-            # Get the contraction indices from the dictionary and append them to the "delta" list.
             la, lb = c["delta"]
             deltas.append((la, lb, c["space"]))
 
-        # Continue to the next pair string upon failure. Append the fully contracted terms and
-        # their corresponding signs, otherwise.
+        # Keep only fully surviving matchings, tagged with the permutation sign.
         if not ok:
             continue
         terms.append({"sign": fermion_sign(pair_string), "deltas": deltas})

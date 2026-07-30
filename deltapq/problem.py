@@ -1,32 +1,4 @@
-"""
-The ``Problem`` -- the object a deltapq input file builds.
-
-A derivation the user cares about is always a matrix element of the shape
-
-    <bra| expr |ket>
-
-where ``expr`` is an operator expression (built from the operator library and the
-expression algebra) and ``bra`` / ``ket`` are projection manifolds -- the
-reference determinant, or an excited one. A ``Problem`` bundles those pieces with
-a name, and knows how to contract, resolve, and collect them into the finished
-symbolic equation.
-
-An input file therefore reads like a short problem statement:
-
-    from deltapq import Problem, operator_library as op
-
-    energy = Problem(
-        name = "MP2 energy",
-        bra  = op.reference(),
-        expr = op.V_N * op.doubles("t", "i", "j", "a", "b"),
-        ket  = op.reference(),
-    )
-    energy.report()
-
-Everything the engine needs beyond those four fields is inferred: in particular
-the EXTERNAL indices (the free labels a projection fixes) are read straight off
-the bra and ket manifolds, so the user never has to list them by hand.
-"""
+"""Contains the Problem -- the <bra| expr |ket> derivation a deltapq input file builds, and its derive/report interface."""
 
 from dataclasses import dataclass, field
 
@@ -37,10 +9,21 @@ from .canonicalize import canonicalize, format_canonical
 def _external_labels(manifold):
     """Collect every index label carried by a manifold's operators.
 
+    Parameters
+    ----------
+    manifold : Expression
+        A projection manifold (a bra or ket).
+
+    Returns
+    -------
+    set
+        The labels of every operator in every block of the manifold.
+
+    Notes
+    -----
     A projection manifold like ``<Phi_ij^ab|`` contributes operators on the fixed
-    labels i, j, a, b; those are exactly the external indices of the problem. The
-    reference manifold contributes no operators, hence no externals. We simply
-    gather the labels of every operator in every block of the manifold.
+    labels i, j, a, b -- exactly the external indices of the problem. The reference
+    manifold contributes no operators, hence no externals.
     """
     labels = set()
     for term in manifold.terms:
@@ -54,13 +37,29 @@ def _external_labels(manifold):
 class Problem:
     """A user-defined derivation: the collected value of <bra| expr |ket>.
 
-    ``expr`` is the operator expression to sandwich; ``bra`` and ``ket`` are
-    projection manifolds (default to the reference determinant, giving an energy).
-    ``externals`` is normally left as None and inferred from the manifolds, but
-    can be given explicitly to override that inference. ``symmetry`` is the reality
-    of the orbitals, defaulting to the general ``"complex"`` (Hermitian) case;
-    pass ``"real"`` to exploit the Hermiticity symmetries that hold only for real
-    orbitals (f_pq = f_qp and <pq||rs> = <rs||pq>).
+    Attributes
+    ----------
+    name : str
+        A label for the derivation, printed by ``report``.
+    expr : Expression
+        The operator expression to sandwich.
+    bra, ket : Expression
+        Projection manifolds; default to the reference determinant (an energy).
+    externals : tuple, optional
+        The external index labels. Normally None and inferred from the manifolds;
+        set explicitly to override that inference.
+    symmetry : {"complex", "real"}
+        Reality of the orbitals. Defaults to the general ``"complex"`` (Hermitian)
+        case; ``"real"`` additionally exploits the Hermiticity symmetries that hold
+        only for real orbitals (f_pq = f_qp and <pq||rs> = <rs||pq>).
+
+    Notes
+    -----
+    A derivation is always a matrix element ``<bra| expr |ket>``, with ``expr``
+    built from the operator library and the expression algebra. An input file reads
+    like a short problem statement (see the package README for a worked example);
+    everything the engine needs beyond these fields is inferred -- in particular the
+    external indices, read straight off the bra and ket manifolds.
     """
     name: str
     expr: Expression
@@ -72,9 +71,16 @@ class Problem:
     def external_indices(self):
         """Return the external index labels, inferred from bra/ket unless given.
 
-        The externals must be held fixed during collection (they are not summed
-        dummies), so they are the labels the projection manifolds pin down. An
-        explicit ``externals`` overrides the inference for unusual cases.
+        Returns
+        -------
+        tuple of str
+            The external labels, sorted. An explicit ``externals`` is returned as
+            given; otherwise the labels are gathered from the bra and ket.
+
+        Notes
+        -----
+        Externals are held fixed during collection (they are not summed dummies),
+        so they are exactly the labels the projection manifolds pin down.
         """
         if self.externals is not None:
             return tuple(self.externals)
@@ -84,10 +90,17 @@ class Problem:
     def derive(self):
         """Contract, resolve, and collect the problem into canonical terms.
 
+        Returns
+        -------
+        list of CanonicalTerm
+            The collected symbolic equation.
+
+        Notes
+        -----
         The matrix element is evaluated as the vacuum expectation value of the
         product ``bra * expr * ket`` (the reference manifolds are the algebra's
-        unit, so a plain energy needs no special handling), and the raw terms are
-        then canonicalized with the external indices held fixed.
+        unit, so a plain energy needs no special handling); the raw terms are then
+        canonicalized with the external indices held fixed.
         """
         raw = (self.bra * self.expr * self.ket).vev()
         return canonicalize(
@@ -97,9 +110,19 @@ class Problem:
     def report(self, stream=None):
         """Derive the problem and print it as ``name: <collected equation>``.
 
-        Returns the collected terms as well, so a caller can both see the result
-        and go on to use it. Output is plain text for now; a LaTeX rendering can
-        be layered on later.
+        Parameters
+        ----------
+        stream : file-like, optional
+            Where to print; defaults to standard output.
+
+        Returns
+        -------
+        list of CanonicalTerm
+            The collected terms, so a caller can both see and reuse the result.
+
+        Notes
+        -----
+        Output is plain text for now; a LaTeX rendering can be layered on later.
         """
         collected = self.derive()
         print(f"{self.name}: {format_canonical(collected)}", file=stream)

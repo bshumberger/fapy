@@ -1,23 +1,4 @@
-"""
-Delta resolution: turn the pile of Kronecker deltas a full contraction produces
-into resolved indices with a definite orbital space.
-
-A contracted term comes out of the driver as a list of deltas like
-``(la, lb, space)``. A delta ``delta_{la,lb}`` does not merely decorate the term
--- it asserts that the two labels are the SAME index, so it should be spent by
-substituting one label for the other everywhere and then disappearing. When many
-deltas chain together (``delta_{p,i}`` and ``delta_{i,j}`` ...), the labels form
-equivalence classes; we build those classes with a union-find, choose one
-canonical representative per class, and stamp the class with the space it was
-contracted in.
-
-That last step is the ``delta_{p in i}`` restriction from the notes (the
-normal-ordering of the Hamiltonian): a GENERAL index ``p`` that contracts through
-a hole line is thereby restricted to the occupied space, and one that contracts
-through a particle line is restricted to the virtual space. Resolution is what
-records that restriction, so downstream layers know whether a resolved index sums
-over occupied or virtual orbitals.
-"""
+"""Contains delta resolution: spend the Kronecker deltas a contraction produces, merging identified labels into equivalence classes with a definite orbital space."""
 
 from dataclasses import dataclass
 from typing import Optional
@@ -27,10 +8,19 @@ from typing import Optional
 class ResolvedTerm:
     """One contracted term after its deltas have been spent.
 
-    ``sign`` is the fermionic sign carried over from the driver. ``rep`` maps
-    every original label to the canonical representative of its equivalence
-    class, and ``spaces`` gives the resolved orbital space ("occ" or "virt") of
-    each representative -- i.e. the ``delta_{p in i}`` restriction for that class.
+    Attributes
+    ----------
+    sign : int
+        The fermionic sign carried over from the driver.
+    rep : dict
+        Maps every original label to the canonical representative of its
+        equivalence class.
+    spaces : dict
+        The resolved orbital space ("occ" or "virt") of each representative -- the
+        ``delta_{p in i}`` restriction (notes, normal-ordered Hamiltonian) for that
+        class: a general index that contracts through a hole line is restricted to
+        occupied, through a particle line to virtual. Downstream layers read this
+        to know whether a resolved index sums over occupied or virtual orbitals.
     """
     sign: int
     rep: dict            # original label -> canonical representative label
@@ -42,12 +32,28 @@ class ResolvedTerm:
 def declared_spaces(ops):
     """Collect the DECLARED space of every label appearing in a string.
 
+    Parameters
+    ----------
+    ops : iterable of Operator
+        The operators of the string.
+
+    Returns
+    -------
+    dict
+        Maps each label to its declared space ("occ", "virt", or "gen").
+
+    Raises
+    ------
+    ValueError
+        If a label is declared with conflicting spaces across the string.
+
+    Notes
+    -----
     Resolution prefers a concretely-spaced index (occ/virt) over a general one
-    when choosing a class representative, so that a summed general index resolves
-    onto the specific index it met. We read that preference from the operators'
-    declared spaces rather than sniffing the label spellings (which the package
-    deliberately never does). A label must be declared consistently everywhere it
-    appears.
+    when choosing a class representative, so a summed general index resolves onto
+    the specific index it met. That preference is read from the operators' declared
+    spaces rather than sniffing the label spellings (which the package deliberately
+    never does).
     """
     declared = {}
     for o in ops:
@@ -65,11 +71,30 @@ def declared_spaces(ops):
 def resolve_term(term, declared=None) -> Optional[ResolvedTerm]:
     """Resolve one driver term into a ``ResolvedTerm``, or None if it vanishes.
 
+    Parameters
+    ----------
+    term : dict
+        A driver term, ``{"sign": ..., "deltas": [(la, lb, space), ...]}``. Each
+        delta asserts that the two labels are the SAME index.
+    declared : dict, optional
+        Declared spaces of the labels (see ``declared_spaces``), used to prefer a
+        concretely-spaced representative.
+
+    Returns
+    -------
+    ResolvedTerm or None
+        The resolved term, or None when a single class is forced into two spaces (a
+        general index contracting as a hole line in one delta and a particle line
+        in another) -- physically impossible.
+
+    Notes
+    -----
     The deltas are read as identifications between labels and merged with a small
-    union-find. Each resulting class is then assigned the space it was contracted
-    in; if a single class is asked to be both occupied and virtual (a general
-    index that somehow contracted as a hole line in one delta and a particle line
-    in another), the term is physically impossible and resolves to None.
+    union-find; when many deltas chain together the labels form equivalence
+    classes. Each class is stamped with the space it was contracted in, and a
+    representative is chosen per class -- preferring a concretely-spaced member so
+    a general dummy resolves onto the specific index it contracted with, ties
+    breaking on the smallest label for determinism.
     """
     declared = declared or {}
 
@@ -134,12 +159,23 @@ def resolve_term(term, declared=None) -> Optional[ResolvedTerm]:
 
 
 def resolve_terms(terms, declared=None):
-    """Resolve a list of driver terms, dropping any that vanish on resolution."""
+    """Resolve a list of driver terms, dropping any that vanish on resolution.
+
+    Parameters
+    ----------
+    terms : list of dict
+        Driver terms (see ``resolve_term``).
+    declared : dict, optional
+        Declared spaces of the labels.
+
+    Returns
+    -------
+    list of ResolvedTerm
+        The resolved terms, with vanishing ones omitted.
+    """
     resolved = []
     for term in terms:
         r = resolve_term(term, declared)
         if r is not None:
             resolved.append(r)
     return resolved
-
-

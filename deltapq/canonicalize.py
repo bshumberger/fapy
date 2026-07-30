@@ -1,29 +1,4 @@
-"""
-Canonicalization and term collection: fold the pile of raw contraction terms
-into a small set of distinct, summed terms.
-
-A single physical contribution shows up many times over in the raw output, in two
-disguises that hide the fact that the terms are equal:
-
-* Summed (dummy) indices are named arbitrarily. Two terms that differ only by a
-  relabelling of internal indices are the same term.
-* The tensors have permutational symmetry. ``<pq||rs>`` is antisymmetric in
-  ``p<->q`` and in ``r<->s`` and symmetric under ``(pq)<->(rs)``; the amplitudes
-  ``t_ij^ab`` are antisymmetric in ``i<->j`` and in ``a<->b``. Swapping such
-  indices only changes the term by a sign.
-
-We collapse both disguises by brute force, exactly as planned: for each term we
-run over every renaming of its dummy indices and, for each, reduce every tensor
-to the lexicographically smallest arrangement its own symmetry allows (tracking
-the sign flips). The smallest arrangement over all renamings is the term's
-canonical key; terms sharing a key have their coefficients summed. We deliberately
-do NOT try to detect equivalence pair by pair -- a canonical key per term and a
-dictionary does the collecting.
-
-External indices (those fixed by a projection manifold, e.g. the i, j, a, b of a
-``<Phi_ij^ab|`` bra) are held fixed: they are never renamed, though tensor
-symmetry may still move them between slots.
-"""
+"""Contains canonicalization and term collection: fold the raw contraction terms into a small set of distinct, summed terms via dummy renaming and tensor symmetry."""
 
 from dataclasses import dataclass, field
 from fractions import Fraction
@@ -83,13 +58,27 @@ _HERMITIAN_SYMMETRY = {
 def _tensor_generators(tensor, symmetry):
     """Return the symmetry generators to use for ``tensor`` under a run mode.
 
-    Two sources are combined. The definitional (mode-independent) symmetry comes
-    from the tensor's own annotation if it has one -- so amplitudes and integrals
-    built by the operator library carry their antisymmetry regardless of name --
-    or from the name-keyed fallback table for hand-built tensors. On top of that,
-    the Hermiticity symmetry for the run ``symmetry`` mode is added by name: real
-    orbitals give f_pq = f_qp and the pair-exchange of <pq||rs>, while complex
-    Hermitian adds nothing.
+    Parameters
+    ----------
+    tensor : Integral
+        The factor whose symmetry is needed.
+    symmetry : {"real", "complex"}
+        The run mode.
+
+    Returns
+    -------
+    list
+        The (permutation, sign) generators: the tensor's definitional symmetry
+        plus, in "real" mode, its Hermiticity symmetry.
+
+    Notes
+    -----
+    The definitional (mode-independent) symmetry comes from the tensor's own
+    annotation if it has one -- so amplitudes and integrals built by the operator
+    library carry their antisymmetry regardless of name -- or from the name-keyed
+    fallback table for hand-built tensors. On top of that the Hermiticity symmetry
+    for the run mode is added by name: real orbitals give f_pq = f_qp and the
+    pair-exchange of <pq||rs>, while complex Hermitian adds nothing.
     """
     definitional = (
         list(tensor.symmetry) if tensor.symmetry
@@ -102,10 +91,24 @@ def _tensor_generators(tensor, symmetry):
 def _symmetry_orbit(generators, indices):
     """Yield every (index tuple, sign) reachable from ``indices`` by symmetry.
 
-    Starting from the given index tuple with sign +1, we repeatedly apply the
-    generator permutations until no new signed arrangement appears. This closes
-    the generators into the full symmetry group, expressed directly as the set of
-    arrangements the tensor's indices can take.
+    Parameters
+    ----------
+    generators : list
+        The (permutation, sign) generators.
+    indices : tuple of str
+        The starting index arrangement.
+
+    Yields
+    ------
+    tuple
+        Each reachable (index tuple, sign) pair.
+
+    Notes
+    -----
+    Starting from ``indices`` with sign +1, the generator permutations are applied
+    repeatedly -- a breadth-first closure -- until no new signed arrangement
+    appears. This closes the generators into the full symmetry group, expressed
+    directly as the set of arrangements the tensor's indices can take.
     """
     # A breadth-first closure over states, each a (index tuple, sign) pair.
     seen = {tuple(indices): 1}
@@ -126,12 +129,25 @@ def _symmetry_orbit(generators, indices):
 def canonical_tensor(tensor, symmetry="complex"):
     """Reduce a tensor to its lexicographically smallest symmetric arrangement.
 
-    Among all index orderings the tensor's symmetry permits, we pick the smallest
-    tuple and return it together with the sign picked up getting there. This is
-    the per-tensor half of canonicalization; the dummy renaming around it is what
-    makes two whole terms comparable. The reduced tensor keeps the original's
-    symmetry annotation. ``symmetry`` selects the run mode -- see
-    ``_tensor_generators`` -- and defaults to the general ``"complex"`` case.
+    Parameters
+    ----------
+    tensor : Integral
+        The factor to reduce.
+    symmetry : {"real", "complex"}, optional
+        The run mode selecting which symmetries apply (see ``_tensor_generators``);
+        defaults to the general ``"complex"`` case.
+
+    Returns
+    -------
+    tuple
+        ``(Integral, sign)`` -- the reduced tensor in its smallest arrangement and
+        the sign picked up getting there. The reduced tensor keeps the original's
+        symmetry annotation.
+
+    Notes
+    -----
+    This is the per-tensor half of canonicalization; the dummy renaming around it
+    (see ``canonicalize_term``) is what makes two whole terms comparable.
     """
     generators = _tensor_generators(tensor, symmetry)
     best_idx = None
@@ -147,9 +163,19 @@ def canonical_tensor(tensor, symmetry="complex"):
 
 @dataclass
 class CanonicalTerm:
-    """A collected term: a coefficient times a canonical product of integrals."""
+    """A collected term: a coefficient times a canonical product of integrals.
+
+    Attributes
+    ----------
+    coefficient : Fraction
+        The summed signed coefficient.
+    integrals : list of Integral
+        The factors, in canonical, sorted order.
+    index_spaces : dict
+        Maps each canonical index to its resolved orbital space ("occ" or "virt").
+    """
     coefficient: Fraction
-    integrals: list                   # list[Integral] in canonical, sorted order
+    integrals: list
     index_spaces: dict = field(default_factory=dict)
 
     def __repr__(self):
@@ -159,11 +185,25 @@ class CanonicalTerm:
 
 
 def _dummy_labels(term, external_set):
-    """Split a term's indices into occupied and virtual DUMMY labels.
+    """Split a term's summed indices into occupied and virtual dummy labels.
 
-    Every index that is not held fixed as an external is a summed dummy; we group
-    the dummies by the space they resolved into so that renaming only ever maps an
-    occupied dummy to an occupied slot and a virtual dummy to a virtual slot.
+    Parameters
+    ----------
+    term : Term
+        The term whose indices are inspected.
+    external_set : set
+        Labels held fixed as externals, which are not dummies.
+
+    Returns
+    -------
+    tuple of list
+        ``(occupied_dummies, virtual_dummies)``, each sorted.
+
+    Notes
+    -----
+    Every index not held fixed as an external is a summed dummy; grouping them by
+    resolved space ensures a renaming only ever maps an occupied dummy to an
+    occupied slot and a virtual dummy to a virtual slot.
     """
     occ, virt = set(), set()
     for tensor in term.integrals:
@@ -181,12 +221,32 @@ def _dummy_labels(term, external_set):
 def canonicalize_term(term, external_set, external_spaces, symmetry="complex"):
     """Return the canonical key, overall sign, and index spaces of one term.
 
-    We try every way of renaming the occupied dummies onto canonical occupied
-    slots O0, O1, ... and the virtual dummies onto V0, V1, ..., leaving external
-    indices untouched. For each renaming the tensors are individually reduced to
-    their smallest symmetric arrangement and then sorted (the product is
-    commutative), giving a candidate key and sign. The smallest key wins.
-    ``symmetry`` selects the run mode used to reduce each tensor.
+    Parameters
+    ----------
+    term : Term
+        The term to canonicalize.
+    external_set : set
+        External labels, held fixed (never renamed).
+    external_spaces : dict
+        The known space of each external label.
+    symmetry : {"real", "complex"}, optional
+        The run mode used to reduce each tensor.
+
+    Returns
+    -------
+    tuple
+        ``(key, sign, spaces)`` -- the canonical key (a sorted tuple of
+        ``(name, indices)``), the overall sign, and the resolved space of each
+        canonical index.
+
+    Notes
+    -----
+    Every way of renaming the occupied dummies onto canonical slots O0, O1, ... and
+    the virtual dummies onto V0, V1, ... is tried, leaving external indices
+    untouched. For each renaming the tensors are individually reduced to their
+    smallest symmetric arrangement and then sorted (the product is commutative),
+    giving a candidate key and sign; the smallest key wins. Externals are never
+    renamed, though tensor symmetry may still move them between slots.
     """
     occ_dummies, virt_dummies = _dummy_labels(term, external_set)
     occ_slots = [f"O{k}" for k in range(len(occ_dummies))]
@@ -235,16 +295,32 @@ def canonicalize_term(term, external_set, external_spaces, symmetry="complex"):
 def canonicalize(terms, externals=(), symmetry="complex"):
     """Canonicalize and collect a list of ``Term``s into ``CanonicalTerm``s.
 
-    Each term is reduced to its canonical key and the (sign-adjusted) coefficient
-    is added into a running total for that key. Keys whose coefficients cancel to
-    zero are dropped, and the survivors are returned sorted for a stable,
-    reproducible ordering.
+    Parameters
+    ----------
+    terms : list of Term
+        The raw contraction terms.
+    externals : iterable of str, optional
+        Labels fixed by a projection manifold (e.g. the i, j, a, b of a
+        ``<Phi_ij^ab|`` bra); held fixed during collection.
+    symmetry : {"real", "complex"}, optional
+        Reality of the orbitals; defaults to the general ``"complex"`` (Hermitian)
+        case, exploiting only the mode-independent tensor symmetries. Pass
+        ``"real"`` to also collect under the Hermiticity symmetries f_pq = f_qp and
+        <pq||rs> = <rs||pq>, exact only for real orbitals.
 
-    ``symmetry`` selects the reality of the orbitals and defaults to the general
-    ``"complex"`` (Hermitian) case, in which only the mode-independent tensor
-    symmetries are exploited. Pass ``"real"`` to additionally collect terms under
-    the Hermiticity symmetries f_pq = f_qp and <pq||rs> = <rs||pq>, exact only for
-    real orbitals.
+    Returns
+    -------
+    list of CanonicalTerm
+        The distinct collected terms, sorted, with zero-coefficient terms dropped.
+
+    Notes
+    -----
+    A single physical contribution appears many times in the raw output, disguised
+    two ways: summed dummy indices are named arbitrarily, and tensors have
+    permutational symmetry (so swapping indices only changes a term by a sign).
+    Both are collapsed by brute force -- each term is reduced to a canonical key
+    (see ``canonicalize_term``) and terms sharing a key have their coefficients
+    summed; equivalence is deliberately NOT detected pair by pair.
     """
     external_set = set(externals)
 
@@ -276,7 +352,18 @@ def canonicalize(terms, externals=(), symmetry="complex"):
 
 
 def format_canonical(terms):
-    """Pretty-print collected terms as a signed sum of tensor products."""
+    """Pretty-print collected terms as a signed sum of tensor products.
+
+    Parameters
+    ----------
+    terms : list of CanonicalTerm
+        The collected terms.
+
+    Returns
+    -------
+    str
+        A signed-sum string, or "0" when there are no terms.
+    """
     if not terms:
         return "0"
     parts = []
