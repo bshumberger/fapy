@@ -99,13 +99,13 @@ class Problem:
         -----
         The matrix element is evaluated as the vacuum expectation value of the
         product ``bra * expr * ket`` (the reference manifolds are the algebra's
-        unit, so a plain energy needs no special handling); the raw terms are then
-        canonicalized with the external indices held fixed.
+        unit, so a plain energy needs no special handling); the external indices are
+        threaded into the contraction so resolution keeps them, and the raw terms
+        are then canonicalized with those indices held fixed.
         """
-        raw = (self.bra * self.expr * self.ket).vev()
-        return canonicalize(
-            raw, externals=self.external_indices(), symmetry=self.symmetry
-        )
+        externals = self.external_indices()
+        raw = (self.bra * self.expr * self.ket).vev(externals=externals)
+        return canonicalize(raw, externals=externals, symmetry=self.symmetry)
 
     def report(self, stream=None):
         """Derive the problem and print it as ``name: <collected equation>``.

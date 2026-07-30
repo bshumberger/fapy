@@ -8,6 +8,7 @@ occupied or virtual space purely from how it contracted.
 """
 
 from deltapq import cre, ann
+from deltapq.resolve import resolve_term
 from deltapq.tests.utils import resolve_groups, membership as _by_membership
 
 
@@ -63,3 +64,23 @@ def test_all_general_indices_still_pick_up_spaces():
     assert first.spaces["p"] == "occ"    # {p,q} restricted to occupied
     assert first.spaces["r"] == "occ"    # {r,u} restricted to occupied
     assert first.spaces["s"] == "virt"   # {s,t} restricted to virtual
+
+
+def test_external_wins_representative_over_lexical_order():
+    """A delta between a summed dummy and an external keeps the external.
+
+    A projection manifold's index must survive as its class representative so it
+    is never renamed onto a summed dummy -- even when it is lexically larger than
+    the dummy, which is precisely the case the smallest-label tiebreak got wrong.
+    """
+    # i (summed) contracts with k (external), both occupied.
+    term = {"sign": 1, "deltas": [("i", "k", "occ")]}
+
+    # With no externals the smallest label wins, so k is renamed onto i.
+    plain = resolve_term(term)
+    assert plain.rep["k"] == "i"
+
+    # Declaring k external flips the choice: i resolves onto k, and k survives.
+    fixed = resolve_term(term, externals=("k",))
+    assert fixed.rep["i"] == "k" and fixed.rep["k"] == "k"
+    assert fixed.spaces["k"] == "occ"

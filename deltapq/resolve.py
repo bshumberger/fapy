@@ -68,7 +68,7 @@ def declared_spaces(ops):
 
 # --- union-find over the delta labels -----------------------------------------
 
-def resolve_term(term, declared=None) -> Optional[ResolvedTerm]:
+def resolve_term(term, declared=None, externals=()) -> Optional[ResolvedTerm]:
     """Resolve one driver term into a ``ResolvedTerm``, or None if it vanishes.
 
     Parameters
@@ -79,6 +79,10 @@ def resolve_term(term, declared=None) -> Optional[ResolvedTerm]:
     declared : dict, optional
         Declared spaces of the labels (see ``declared_spaces``), used to prefer a
         concretely-spaced representative.
+    externals : iterable of str, optional
+        Labels fixed by a projection manifold. An external in a class must survive
+        as its representative, so a summed dummy identified with it is renamed onto
+        the external -- never the reverse.
 
     Returns
     -------
@@ -92,11 +96,13 @@ def resolve_term(term, declared=None) -> Optional[ResolvedTerm]:
     The deltas are read as identifications between labels and merged with a small
     union-find; when many deltas chain together the labels form equivalence
     classes. Each class is stamped with the space it was contracted in, and a
-    representative is chosen per class -- preferring a concretely-spaced member so
-    a general dummy resolves onto the specific index it contracted with, ties
-    breaking on the smallest label for determinism.
+    representative is chosen per class. The choice prefers an external label first
+    (a projection fixes it, so it must be kept), then a concretely-spaced member so
+    a general dummy resolves onto the specific index it contracted with, breaking
+    ties on the smallest label for determinism.
     """
     declared = declared or {}
+    external_set = set(externals)
 
     # Standard union-find with path halving. ``parent`` maps a label to its
     # parent; a label is its own parent when it is the root of its class.
@@ -140,16 +146,21 @@ def resolve_term(term, declared=None) -> Optional[ResolvedTerm]:
     for label in list(parent):
         classes.setdefault(find(label), []).append(label)
 
-    # Choose a representative per class and record its resolved space. A class
-    # prefers a concretely-spaced member (occ/virt) so that a general dummy
-    # resolves onto the specific index it contracted with; ties break on the
-    # smallest label so the choice is deterministic.
+    # Choose a representative per class and record its resolved space. An external
+    # label wins first (a projection fixes it, so it must survive), then a
+    # concretely-spaced member (occ/virt) so a general dummy resolves onto the
+    # specific index it contracted with; ties break on the smallest label so the
+    # choice is deterministic.
     rep = {}
     spaces = {}
     for root, members in classes.items():
         chosen = min(
             members,
-            key=lambda L: (0 if declared.get(L, "gen") in ("occ", "virt") else 1, L),
+            key=lambda L: (
+                0 if L in external_set else 1,
+                0 if declared.get(L, "gen") in ("occ", "virt") else 1,
+                L,
+            ),
         )
         spaces[chosen] = class_space[root]
         for label in members:
@@ -158,7 +169,7 @@ def resolve_term(term, declared=None) -> Optional[ResolvedTerm]:
     return ResolvedTerm(term["sign"], rep, spaces)
 
 
-def resolve_terms(terms, declared=None):
+def resolve_terms(terms, declared=None, externals=()):
     """Resolve a list of driver terms, dropping any that vanish on resolution.
 
     Parameters
@@ -167,6 +178,8 @@ def resolve_terms(terms, declared=None):
         Driver terms (see ``resolve_term``).
     declared : dict, optional
         Declared spaces of the labels.
+    externals : iterable of str, optional
+        Labels fixed by a projection manifold (see ``resolve_term``).
 
     Returns
     -------
@@ -175,7 +188,7 @@ def resolve_terms(terms, declared=None):
     """
     resolved = []
     for term in terms:
-        r = resolve_term(term, declared)
+        r = resolve_term(term, declared, externals)
         if r is not None:
             resolved.append(r)
     return resolved

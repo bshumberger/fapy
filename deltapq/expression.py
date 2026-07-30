@@ -169,8 +169,14 @@ class Expression:
 
     # --- evaluation -----------------------------------------------------------
 
-    def vev(self):
+    def vev(self, externals=()):
         """Evaluate the Fermi-vacuum expectation value <Phi_0| self |Phi_0>.
+
+        Parameters
+        ----------
+        externals : iterable of str, optional
+            Labels fixed by a projection manifold, threaded to the kernel so
+            resolution keeps them as class representatives (see ``contract_blocks``).
 
         Returns
         -------
@@ -181,7 +187,7 @@ class Expression:
         """
         out = []
         for t in self.terms:
-            for term in contract_blocks(*t.blocks, policy=t.policy):
+            for term in contract_blocks(*t.blocks, policy=t.policy, externals=externals):
                 out.append(
                     Term(
                         coefficient=t.coefficient * term.coefficient,

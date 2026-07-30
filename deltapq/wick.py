@@ -106,7 +106,7 @@ class Term:
         return f"{sign}{abs(self.coefficient)} {body}"
 
 
-def contract_blocks(*blocks, policy=normal_ordered_blocks):
+def contract_blocks(*blocks, policy=normal_ordered_blocks, externals=()):
     """Contract a set of factor-carrying blocks into a list of terms.
 
     Parameters
@@ -117,6 +117,10 @@ def contract_blocks(*blocks, policy=normal_ordered_blocks):
         Contraction policy ``may_contract(op_a, op_b) -> bool`` deciding which
         pairs are eligible to contract. Defaults to the generalized-Wick
         ``normal_ordered_blocks``.
+    externals : iterable of str, optional
+        Labels fixed by a projection manifold, kept as class representatives during
+        resolution so a projection's indices survive rather than being renamed onto
+        a summed dummy (see ``resolve_term``).
 
     Returns
     -------
@@ -147,7 +151,7 @@ def contract_blocks(*blocks, policy=normal_ordered_blocks):
     # Run the contraction and turn each surviving matching into a Term.
     terms = []
     for raw in wick_vev(combined, policy=policy):
-        resolved = resolve_term(raw, declared)
+        resolved = resolve_term(raw, declared, externals)
         if resolved is None:
             continue
 
