@@ -50,8 +50,8 @@ anything inferred from code or from general knowledge.
 |---|---|
 | `main.pdf` | **Primary convention source.** Author's own second-quantization notes. Defines the quasi-particle picture, contraction rules, and the normal-ordered Hamiltonian. Cite equation numbers from here. |
 | `JChemPhys_118_2985_2003.pdf` | Hald, Halkier, Jørgensen, Coriani, Hättig, Helgaker, *J. Chem. Phys.* **118**, 2985 (2003). Analytic CCSD(T) gradients. Used as a **design constraint**, not a near-term target — see "Generality constraints" below. |
-| `wick_quasiparticle.py` | Current working implementation. |
-| `quick_wicks.ipynb` | Author's annotated notebook version with worked examples. |
+| `deltapq/` (the package) | **The current working implementation.** |
+| `wick_quasiparticle.py`, `quick_wicks.ipynb` | Historical single-file prototype / annotated notebook the package grew from. |
 
 ### Key equations in `main.pdf`
 
@@ -103,116 +103,78 @@ contracted pair adjacent, via inversion count on the flattened pair list.
 It reads **positions only**, never operators.
 
 **Consequence:** the sign depends entirely on the left-to-right order in which
-operator blocks are flattened. `contract_groups(g1, g2)` and
-`contract_groups(g2, g1)` may differ in sign. Pass blocks in the order they
+operator blocks are flattened. `contract_blocks(g1, g2)` and
+`contract_blocks(g2, g1)` may differ in sign. Pass blocks in the order they
 appear in the expression being evaluated.
 
-**UNVERIFIED:** overall sign convention has not been checked against a
-hand-derived case. Do this before trusting any CC result.
+**Validated** against the MP2/CISD/CCSD energies and the MP2 t- and λ-amplitude
+equations (which match the hand-derived residuals in the notes), so the overall
+sign convention is trusted for the cases exercised.
 
 ---
 
 ## Current implementation
 
-### Module layout (`wick_quasiparticle.py`)
-
-- `Operator` — frozen dataclass: `label`, `dagger`, `space`, `group`
-- `cre(label, space, group)` / `ann(label, space, group)` — constructors
-- `group_string(ops, group)` — stamp a block with a group index
-- `contraction(a, b)` — the two elementary rules; returns
-  `{"delta": (la, lb), "space": "occ"|"virt"}` or `None`
-- `recursive_generator(indices)` — yields all perfect matchings of positions
-  (the `(2n-1)!!` pairings)
-- `fermion_sign(pairs)` — inversion-count parity
-- `wick_vev(ops, exclude_intragroup=True)` — driver; filters matchings
-- `contract_groups(*groups)` — flattens blocks with group tags, calls `wick_vev`
-- `format_terms(terms)` — pretty-printer
+### Module layout (the `deltapq/` package)
+Construction side: `operators.py` (data model: `Operator`, `Integral`,
+`OperatorBlock`, `cre`/`ann`/`block`/`group_string`), `expression.py` (the
+sum-of-products algebra + `Expression.vev`), `operator_library.py`
+(`H_N`/`F_N`/`V_N`, excitations/de-excitations, manifolds, `kappa`). Evaluation
+side: `contraction.py` (elementary rule + combinatorics), `policy.py`
+(`may_contract`), `resolve.py` (delta resolution), `wick.py` (`wick_vev`,
+`contract_blocks`, `Term`), `canonicalize.py` (symmetry + collection),
+`problem.py` (the `Problem` interface). **`README.md` has the per-file surface
+and the end-to-end call flow — start there to navigate.**
 
 ### Generalized Wick theorem
-Operators inside one normal-ordered `{...}` block never contract with each
-other. Enforced by the `group` field plus the `exclude_intragroup` flag.
-Setting `exclude_intragroup=False` contracts everything (single raw string).
+Operators inside one normal-ordered `{...}` block never contract with each other.
+Enforced by the `group` field plus the **contraction policy** (`policy.py`): the
+default `normal_ordered_blocks` forbids same-group pairs; `contract_all` permits
+everything (a single raw string). The policy is a supplied `may_contract(a, b)`
+callable, kept separate from the elementary rule (ties to Generality constraint #1).
 
 ### Verified behavior
-- All `(2n-1)!!` matchings generated, no duplicates
-- Every matching covers each position exactly once
+- All `(2n-1)!!` matchings generated, no duplicates; each covers every position once.
 - Pairs always emitted ascending (`lo < hi`), so `ops[lo]` is always the left
-  operator — asserted in `wick_vev`
-- Worked example: `{i^ a}{p^ q}{b^ j}` gives 2 surviving terms out of 15
-  candidate matchings:
-  `- d(i,q) d(a,b) d(p,j) + d(i,j) d(a,p) d(q,b)`
+  operator — asserted in `wick_vev`.
+- Worked example: `{i^ a}{p^ q}{b^ j}` gives 2 surviving terms out of 15 candidate
+  matchings: `- d(i,q) d(a,b) d(p,j) + d(i,j) d(a,p) d(q,b)`.
+- MP2/CISD/CCSD energies and the MP2 t/λ amplitude residuals reproduce the notes.
 
 ---
 
-## Known gaps
+## Latent assumptions to audit (critical)
 
-1. **Occupancy tags are dropped on output.** `contraction` returns the space
-   (`"occ"`/`"virt"`) of each delta, `wick_vev` stores it, but `format_terms`
-   discards it. These are the `delta_{p in i}` restrictions from Eqs. (51)–(53).
-   They matter: when a `gen` index contracts, the space determines whether it
-   sums over occupied or virtual and which integral block is indexed.
-   **Fix this in stage 1** — it is required, not cosmetic.
+The engine has hidden assumptions that are **silently wrong when violated** — they
+don't raise, they just produce incorrect (often empty or mis-signed) output. The
+worst kind of bug. **TODO: sweep the code, flag each such assumption explicitly at
+its site, and correct or guard it.** The one that already bit us is the template:
 
-2. **`gen`/`gen` resolution order.** In `contraction`, `can_be` treats `"gen"`
-   as matching either space, so a general pair matches the *first* branch it
-   qualifies for: creator-left/annihilator-right → `"occ"`; annihilator-left/
-   creator-right → `"virt"`. Fixed order, one result per pairing. Verify this
-   is what's wanted when general indices appear on both sides.
+- **[FIXED — the exemplar] Resolution assumed external < dummy lexically.**
+  `resolve_term` chose class representatives by smallest label, so a projection
+  external (`k,l,c,d`) contracting with a lexically-smaller summed dummy (`i,j,a,b`)
+  got renamed *away*, collapsing distinct terms until they cancelled to zero. It
+  broke the Lagrangian λ-amplitude entirely, while the standard tests (externals
+  `i,j,a,b`, dummies `k,l,c,d`) passed by luck of the ordering. This is the shape to
+  hunt for: **a correctness rule riding on an incidental label or ordering choice.**
 
-3. **Sign convention unverified** (see above).
-
-4. **No prefactor handling.** No place to carry the `1/4` on `V_N`, the `1/2`
-   on the HF energy term, etc.
+Candidates to examine (not yet audited):
+- **Overall sign** depends on block-flattening order (see Sign convention) — assumes
+  the caller passes blocks in expression order.
+- **`gen`/`gen` contraction resolves to `occ`** by branch order in `contraction`
+  (`matches_space_dagger`) when both operators are general. Verify that is always
+  what's wanted.
+- **Disjoint dummy labels** are assumed for repeated operators — no auto-relabel, so
+  a reused label silently collides.
+- **Externals come only from `bra`/`ket`** — an `expr` operator carrying an
+  externally-meant index would be treated as summed.
+- **Baked-in real/Hermitian assumptions** — tensor symmetry was formerly real by
+  default (now per-run); audit for any other place a reality assumption survives.
 
 ---
 
-## Design plan
+## Tensor symmetry (declared per run)
 
-### Stage 1 — Delta resolution
-Deltas should **resolve**, not accumulate. Union-find over index labels: build
-equivalence classes, pick a canonical representative, substitute throughout.
-Propagate occupancy: a class resolved in the occupied space becomes an occupied
-index. Output a term with resolved indices and their spaces.
-*Test: hand-check against the `{i^ a}{p^ q}{b^ j}` result above.*
-
-### Stage 2 — Tensors attached to blocks
-Each operator block carries a tensor factor. Terms come out as signed products
-of tensors in canonical indices. No symmetry, no combining yet.
-
-```python
-@dataclass
-class Tensor:
-    name: str                 # 'f', 'g', 't', 'tbar', ...
-    indices: list[str]
-    symmetry: ...             # see stage 4
-
-@dataclass
-class Term:
-    coefficient: float        # sign * prefactors
-    tensors: list[Tensor]     # VARIABLE LENGTH — see generality constraints
-    index_spaces: dict        # index -> "occ" | "virt"
-```
-
-### Stage 3 — Operator constructors
-Expand into grouped operator strings with attached tensors and prefactors:
-```
-F_N     = sum_pq f_pq {a_p^ a_q}
-V_N     = (1/4) sum_pqrs <pq||rs> {a_p^ a_q^ a_s a_r}
-singles = sum_ia x_i^a {a_a^ a_i}
-doubles = (1/4) sum_ijab x_ij^ab {a_a^ a_b^ a_j a_i}
-```
-`singles` and `doubles` are the **excitation operators** of the reference. They
-are single objects, not a separate T (cluster) and C (CI) set: the amplitude
-tensor name `x` is supplied by the caller, so the same excitation serves as a CC
-`t`-amplitude, a CI `c`-coefficient, a residual, etc. What distinguishes the
-methods is how a driver *uses* the excitation operators (linearly in CI,
-exponentially in CC), not the operators themselves.
-
-**Watch the annihilator ordering** — `a_s a_r` and `a_j a_i`, reversed relative
-to the creators. Check against Eq. (54) in `main.pdf`. Getting this wrong is a
-silent sign error.
-
-### Stage 4 — Canonicalization and term collection
 Symmetry declarations:
 - `<pq||rs>`: antisymmetric in `p<->q`, antisymmetric in `r<->s`,
   symmetric under `(pq)<->(rs)`
@@ -243,27 +205,14 @@ a field on `Problem`, with `"complex"` the **default** (the general case) and
   first).
 
 Note the physics: it is the **pair-exchange** symmetry of `<pq||rs>` that is
-real-only, *not* its antisymmetry (an earlier note said "antisymmetry" — wrong).
+real-only, *not* its antisymmetry (the antisymmetry follows from particle-label
+relabelling and holds for complex orbitals too).
 So the two-electron integral is 8-fold in `"real"`, 4-fold in `"complex"`; `f` is
 symmetric in `"real"`, bare in `"complex"`. The validated MP2/CISD/CCSD results
 are real-orbital methods, but their current test assertions do not depend on the
 pair-exchange collapse, so they pass under the `"complex"` default unchanged; pass
 `symmetry="real"` when a derivation's collection genuinely needs the real-only
 symmetries.
-
-### First validation target
-```
-E_corr = sum_ia f_ia t_i^a + (1/4) sum_ijab <ij||ab> t_ij^ab
-```
-The singles-Fock term carries coefficient **1**, not 1/2. The 1/2 belongs to the
-`T_1^2` term `(1/2) sum_ijab <ij||ab> t_i^a t_j^b`, which may be included:
-```
-E_corr = sum_ia f_ia t_i^a
-       + (1/4) sum_ijab <ij||ab> t_ij^ab
-       + (1/2) sum_ijab <ij||ab> t_i^a t_j^b
-```
-Short enough to verify fully by hand and exercises stages 1–3. Do this before
-attempting the `T_2` amplitude equation.
 
 ---
 
@@ -292,8 +241,8 @@ features to build now.
 3. **Variable-length tensor products.** Hald's expressions have terms with
    three or four tensor factors plus Kronecker deltas plus permutation
    operators (see Tables I–VI).
-   → `Term.tensors` must be a **list**, never fixed `amplitude`/`integral`
-   slots.
+   → `Term.integrals` must be a **list**, never fixed `amplitude`/`integral`
+   slots. *(Satisfied: `Term.integrals`/`CanonicalTerm.integrals` are lists.)*
 
 ### Explicitly out of scope for now
 **Spin adaptation.** Hald works closed-shell spin-adapted (`E_pq`,
@@ -313,7 +262,7 @@ A user states a derivation as a Python input file that builds an operator
 expression and wraps it in a `Problem`:
 
 ```python
-from deltapq import Problem, operators as op
+from deltapq import Problem, operator_library as op
 
 Problem(
     name = "MP2 energy",

@@ -30,7 +30,7 @@ the MP2/CISD/CCSD energies and the MP2 amplitude numerator.
 problem in a short Python input file and it returns the collected equation.
 
 ```python
-from deltapq import Problem, operators as op
+from deltapq import Problem, operator_library as op
 
 Problem(
     name = "MP2 energy",
