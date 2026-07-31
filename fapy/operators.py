@@ -155,6 +155,9 @@ class Integral:
         )
 
     def __repr__(self):
+        # A factor with no indices (a named scalar, e.g. E_corr) prints bare.
+        if not self.indices:
+            return self.name
         return f"{self.name}({','.join(self.indices)})"
 
 

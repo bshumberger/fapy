@@ -178,6 +178,34 @@ def doubles_dagger(name, i, j, a, b):
     )
 
 
+# --- scalar factors -----------------------------------------------------------
+
+def scalar(name):
+    """A named scalar factor carrying no indices, e.g. the correlation energy.
+
+    Parameters
+    ----------
+    name : str
+        Name of the scalar factor (e.g. "E_corr").
+
+    Returns
+    -------
+    Expression
+        One term of coefficient 1 whose single block has no operators but carries
+        an index-free factor.
+
+    Notes
+    -----
+    This is the multiplicative unit ``reference()`` (identity) with a named factor
+    attached: it contributes no operators, so it never contracts, and simply rides
+    through the pipeline into every surviving term. It exists to state terms that
+    are not themselves contractions -- the CI amplitude equation's eigenvalue piece
+    ``E_corr c_ij^ab`` is written ``scalar("E_corr") * doubles("c", ...)`` projected
+    onto the doubles manifold, so the whole residual can be stated in the input.
+    """
+    return Expression.single(block([], Integral(name, ())), Fraction(1))
+
+
 # --- projection manifolds (reference and excited determinants) ----------------
 
 def reference():
