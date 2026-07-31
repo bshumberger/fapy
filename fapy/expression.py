@@ -9,6 +9,27 @@ from .wick import contract_blocks, Term
 from .policy import normal_ordered_blocks
 
 
+def _block_labels(blocks):
+    """Every index label appearing in a tuple of blocks (operators and tensors).
+
+    Parameters
+    ----------
+    blocks : tuple of OperatorBlock
+        The blocks of one expression term.
+
+    Returns
+    -------
+    set of str
+        The union of the operator labels and any tensor indices in the blocks.
+    """
+    labels = set()
+    for blk in blocks:
+        labels.update(op.label for op in blk.ops)
+        if blk.integral is not None:
+            labels.update(blk.integral.indices)
+    return labels
+
+
 @dataclass(frozen=True)
 class ExprTerm:
     """One additive term of an expression: a scalar times a product of blocks.
@@ -152,6 +173,20 @@ class Expression:
                     raise ValueError(
                         "cannot multiply expressions with different contraction "
                         "policies; expand them to a common policy first"
+                    )
+                # Two operators multiplied together must use disjoint index labels.
+                # The engine does not relabel dummies, so a shared label is a silent
+                # variable capture: two independent summations forced onto the same
+                # index. That is a failure, not a convention -- reject it here rather
+                # than resolve it into a wrong answer.
+                shared = _block_labels(a.blocks) & _block_labels(b.blocks)
+                if shared:
+                    raise ValueError(
+                        f"index label(s) {sorted(shared)} appear in both factors of "
+                        "a product; operators multiplied together must use disjoint "
+                        "indices (the engine does not relabel dummies). Give each "
+                        "operator its own index labels so no index repeats across the "
+                        "expression."
                     )
                 terms.append(
                     ExprTerm(a.coefficient * b.coefficient, a.blocks + b.blocks, a.policy)
