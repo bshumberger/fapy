@@ -9,10 +9,10 @@ into the single physical result (1/4) <ij||ab> t_ij^ab.
 
 from fractions import Fraction
 
-from deltapq.operators import Integral
-from deltapq.wick import Term
-from deltapq.canonicalize import canonicalize, canonical_tensor
-from deltapq import operator_library as ops
+from fapy.operators import Integral
+from fapy.wick import Term
+from fapy.canonicalize import canonicalize, canonical_tensor
+from fapy import operator_library as ops
 
 
 # --- the two disguises, in isolation ------------------------------------------

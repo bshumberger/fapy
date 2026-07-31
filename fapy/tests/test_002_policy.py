@@ -7,10 +7,10 @@ behaviour), and that swapping in a different policy actually changes which
 pairings are considered.
 """
 
-from deltapq import cre, ann, wick_vev, contract_all
-from deltapq.operators import group_string
-from deltapq.policy import normal_ordered_blocks
-from deltapq.tests.utils import flatten_blocks, format_terms
+from fapy import cre, ann, wick_vev, contract_all
+from fapy.operators import group_string
+from fapy.policy import normal_ordered_blocks
+from fapy.tests.utils import flatten_blocks, format_terms
 
 
 def test_normal_ordered_policy_reproduces_notebook_example():

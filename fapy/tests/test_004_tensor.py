@@ -13,10 +13,10 @@ disagrees with the relative OR absolute sign here, a contraction bug has been
 introduced and no coupled-cluster result downstream can be trusted.
 """
 
-from deltapq import cre, ann
-from deltapq.policy import contract_all
-from deltapq.operators import Integral, block
-from deltapq.wick import contract_blocks
+from fapy import cre, ann
+from fapy.policy import contract_all
+from fapy.operators import Integral, block
+from fapy.wick import contract_blocks
 
 
 def test_integral_relabel_indices_and_passes_through():

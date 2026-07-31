@@ -9,13 +9,13 @@ reversed annihilator ordering the operator strings must use.
 
 from fractions import Fraction
 
-from deltapq.expression import (
+from fapy.expression import (
     Expression,
     commutator,
     left_nested_commutator,
     right_nested_commutator,
 )
-from deltapq import Problem, canonicalize, operator_library as ops
+from fapy import Problem, canonicalize, operator_library as ops
 
 
 # --- expression layer ---------------------------------------------------------

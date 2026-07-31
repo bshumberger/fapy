@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 # Self-descriptive entries which should always be present
 # https://packaging.python.org/en/latest/specifications/declaring-project-metadata/
 [project]
-name = "deltapq"
+name = "fapy"
 version = "0.1.0"
 description = "Symbolic second-quantization / Wick-contraction engine in the quasi-particle picture."
 readme = "README.md"
@@ -44,7 +44,7 @@ namespaces = false
 where = ["."]
 
 [tool.setuptools.package-data]
-deltapq = [
+fapy = [
     "py.typed"
 ]
 

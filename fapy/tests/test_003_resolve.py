@@ -7,9 +7,9 @@ into the right equivalence classes with the right representatives, and that the
 occupied or virtual space purely from how it contracted.
 """
 
-from deltapq import cre, ann
-from deltapq.resolve import resolve_term
-from deltapq.tests.utils import resolve_groups, membership as _by_membership
+from fapy import cre, ann
+from fapy.resolve import resolve_term
+from fapy.tests.utils import resolve_groups, membership as _by_membership
 
 
 def test_example_one_resolution_and_spaces():

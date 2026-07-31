@@ -1,5 +1,5 @@
 """
-deltapq -- a symbolic second-quantization / Wick-contraction engine in the
+fapy -- a symbolic second-quantization / Wick-contraction engine in the
 quasi-particle (Fermi-vacuum) picture.
 
 The package is layered from the bottom up so that the physics kernel (operators,

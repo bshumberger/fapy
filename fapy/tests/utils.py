@@ -1,5 +1,5 @@
 """
-Shared helpers for the deltapq test suite.
+Shared helpers for the fapy test suite.
 
 The test files themselves contain only tests; any helper used by more than one of
 them (or any non-test function at all) lives here so the ``test_*`` modules read
@@ -8,10 +8,10 @@ as a list of scenarios and their assertions.
 
 from collections import Counter
 
-from deltapq.operators import group_string
-from deltapq.wick import wick_vev
-from deltapq.policy import normal_ordered_blocks
-from deltapq.resolve import declared_spaces, resolve_terms
+from fapy.operators import group_string
+from fapy.wick import wick_vev
+from fapy.policy import normal_ordered_blocks
+from fapy.resolve import declared_spaces, resolve_terms
 
 
 def contract_groups(*groups):

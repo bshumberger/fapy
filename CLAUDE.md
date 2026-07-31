@@ -50,7 +50,7 @@ anything inferred from code or from general knowledge.
 |---|---|
 | `main.pdf` | **Primary convention source.** Author's own second-quantization notes. Defines the quasi-particle picture, contraction rules, and the normal-ordered Hamiltonian. Cite equation numbers from here. |
 | `JChemPhys_118_2985_2003.pdf` | Hald, Halkier, Jørgensen, Coriani, Hättig, Helgaker, *J. Chem. Phys.* **118**, 2985 (2003). Analytic CCSD(T) gradients. Used as a **design constraint**, not a near-term target — see "Generality constraints" below. |
-| `deltapq/` (the package) | **The current working implementation.** |
+| `fapy/` (the package) | **The current working implementation.** |
 | `wick_quasiparticle.py`, `quick_wicks.ipynb` | Historical single-file prototype / annotated notebook the package grew from. |
 
 ### Key equations in `main.pdf`
@@ -115,7 +115,7 @@ sign convention is trusted for the cases exercised.
 
 ## Current implementation
 
-### Module layout (the `deltapq/` package)
+### Module layout (the `fapy/` package)
 Construction side: `operators.py` (data model: `Operator`, `Integral`,
 `OperatorBlock`, `cre`/`ann`/`block`/`group_string`), `expression.py` (the
 sum-of-products algebra + `Expression.vev`), `operator_library.py`
@@ -262,7 +262,7 @@ A user states a derivation as a Python input file that builds an operator
 expression and wraps it in a `Problem`:
 
 ```python
-from deltapq import Problem, operator_library as op
+from fapy import Problem, operator_library as op
 
 Problem(
     name = "MP2 energy",
@@ -436,5 +436,5 @@ How the user analyzes, questions, and moves through the code — keep these in m
   author's notes or a textbook, match it exactly (transcribe and confirm).
 - **Keep the package lean** — remove dead/extraneous code; flag test gaps and want
   fundamental operations unit-tested.
-- **Environment:** work/tests run in the `deltapq` conda env
-  (`~/miniconda3/envs/deltapq/bin/python`), not `apyib`.
+- **Environment:** work/tests run in the `fapy` conda env
+  (`~/miniconda3/envs/fapy/bin/python`), not `apyib`.

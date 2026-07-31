@@ -19,8 +19,8 @@ labels the projection fixes, so nothing collides.
 
 from fractions import Fraction
 
-from deltapq import Problem, operator_library as op
-from deltapq.tests.utils import term_multiset
+from fapy import Problem, operator_library as op
+from fapy.tests.utils import term_multiset
 
 
 def _cisd_operator():

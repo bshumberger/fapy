@@ -1,4 +1,4 @@
-# deltapq
+# fapy
 
 A symbolic second-quantization / Wick-contraction engine in the quasi-particle
 (Fermi-vacuum) picture, built toward deriving coupled-cluster, configuration
@@ -26,11 +26,11 @@ notes), the expression algebra (sums, products, commutators), canonicalization
 and term collection, and the `Problem` input-file interface. Validated against
 the MP2/CISD/CCSD energies and the MP2 amplitude numerator.
 
-`deltapq` is a **general derivation engine, not a set of methods**. You state a
+`fapy` is a **general derivation engine, not a set of methods**. You state a
 problem in a short Python input file and it returns the collected equation.
 
 ```python
-from deltapq import Problem, operator_library as op
+from fapy import Problem, operator_library as op
 
 Problem(
     name = "MP2 energy",
@@ -41,13 +41,13 @@ Problem(
 # MP2 energy: 1/4 g(O0,O1,V0,V1) t(O0,O1,V0,V1)
 ```
 
-See the worked problems in `deltapq/tests/test_007_MP2.py`,
+See the worked problems in `fapy/tests/test_007_MP2.py`,
 `test_008_CISD.py`, and `test_009_CCSD.py`.
 
 ## Layout
 
 ```
-deltapq/
+fapy/
     operators.py         the data model: Operator, Integral, OperatorBlock
     contraction.py       the elementary contraction rule + matching combinatorics
     policy.py            which pairs may contract (generalized Wick, ...)
@@ -209,7 +209,7 @@ Install into your environment (editable, so source edits take effect immediately
 pip install -e .
 ```
 
-After that, `import deltapq` works from any directory, so an input file can live
+After that, `import fapy` works from any directory, so an input file can live
 anywhere:
 
 ```
@@ -221,11 +221,11 @@ python my_problem.py     # a script that builds a Problem and calls .report()
 From the repository:
 
 ```
-python -m pytest deltapq/tests
+python -m pytest fapy/tests
 ```
 
 or, once installed, from anywhere:
 
 ```
-python -m pytest --pyargs deltapq
+python -m pytest --pyargs fapy
 ```

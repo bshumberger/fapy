@@ -9,7 +9,7 @@ correlation energy (1/4) <ij||ab> t_ij^ab, and the doubles amplitude numerator
 
 from fractions import Fraction
 
-from deltapq import Problem, operator_library as op
+from fapy import Problem, operator_library as op
 
 
 def test_mp2_energy_is_quarter_integral_amplitude():

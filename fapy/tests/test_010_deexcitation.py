@@ -20,8 +20,8 @@ keeps the two apart; the two operators are given DISJOINT dummy labels.
 
 from fractions import Fraction
 
-from deltapq import Problem, canonicalize, operator_library as op
-from deltapq.tests.utils import term_multiset
+from fapy import Problem, canonicalize, operator_library as op
+from fapy.tests.utils import term_multiset
 
 
 def _cd():

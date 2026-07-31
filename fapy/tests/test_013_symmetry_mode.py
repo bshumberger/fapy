@@ -10,9 +10,9 @@ particle coordinates -- hold in both modes, and that the default is the general
 
 from fractions import Fraction
 
-from deltapq.operators import Integral
-from deltapq.wick import Term
-from deltapq.canonicalize import canonicalize
+from fapy.operators import Integral
+from fapy.wick import Term
+from fapy.canonicalize import canonicalize
 
 
 # --- Hermiticity symmetries: real only ----------------------------------------

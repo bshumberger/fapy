@@ -1,4 +1,4 @@
-"""Contains the Problem -- the <bra| expr |ket> derivation a deltapq input file builds, and its derive/report interface."""
+"""Contains the Problem -- the <bra| expr |ket> derivation a fapy input file builds, and its derive/report interface."""
 
 from dataclasses import dataclass, field
 

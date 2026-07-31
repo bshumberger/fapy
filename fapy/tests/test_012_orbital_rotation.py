@@ -16,8 +16,8 @@ condition), while the fluctuation potential contributes nothing.
 
 from fractions import Fraction
 
-from deltapq import canonicalize, commutator, operator_library as op
-from deltapq.tests.utils import term_multiset
+from fapy import canonicalize, commutator, operator_library as op
+from fapy.tests.utils import term_multiset
 
 
 def test_kappa_is_two_antisymmetric_terms():
