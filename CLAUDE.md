@@ -325,11 +325,32 @@ keeps the general `f_ov` (Brillouin) terms that Eq. 27 drops at canonical HF;
 `<0|[V_N, κ]|0>=0`).
 
 ### Desirable future features (not built)
+- **A generic N-body operator `O_N` as the primitive.** Most of the library is one
+  operator wearing different clothes: `F_N`/`singles` are one-body normal-ordered
+  strings, `V_N`/`doubles`/`doubles_dagger` two-body, differing *only* in (1) the
+  per-index spaces (gen/gen = Hamiltonian, virt/occ = excitation, occ/virt =
+  de-excitation), (2) the tensor name/symmetry (or its absence, for a manifold),
+  and (3) the prefactor, which is uniformly `1/(N!)²` (`1` for one-body, `¼` for
+  two-body). So a single
+  `O_N(name, [(p1,space),…], [(q1,space),…], symmetry=…)` reproduces F_N, V_N, all
+  excitations/de-excitations, and (with `name=None`) the bra/ket manifolds — and
+  delivers **user-defined custom operators** (below) for free.
+  *Recommended shape:* introduce `O_N` as the primitive but keep `F_N`/`V_N`/
+  `doubles`/… as thin named presets on top of it, rather than replacing the
+  library — the presets encode the conventions (reversed-annihilator order, the
+  `¼`, the `g`/amplitude antisymmetry) that would otherwise become per-input-file
+  footguns, and keep input files readable. *Caveats to handle:* (a) `kappa` is
+  **not** an `O_N` — it is a *sum of two* normal-ordered strings (the antisymmetric
+  generator `E_pq^-`) plus a `½`, so it stays a special constructor (Generality
+  constraint #1); (b) the real-mode Hermiticity symmetry currently keys on tensor
+  *name* (`_HERMITIAN_SYMMETRY` in `canonicalize.py`), so a freely-named tensor
+  needs its symmetry to travel **on the operator** instead of via the name table.
 - **User-defined custom operators.** Today a problem composes only the built-in
   operators. Letting an input file declare a *new* operator (its creation/
   annihilation string, prefactor, amplitude tensor, and symmetry) would make the
   engine fully general. Symmetry already travels on the `Integral` (annotation
-  carried by the operator constructors), so this is the natural next extension.
+  carried by the operator constructors), so this is the natural next extension —
+  and falls out of the generic `O_N` primitive above.
 - **Automatic dummy relabeling** so repeated operators (e.g. `T1*T1`,
   `[[H,T2],T2]`) need not be given disjoint index labels by hand.
 - **Mixed contraction policies in a product (the policy conflict).**
