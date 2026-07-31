@@ -1,6 +1,7 @@
 """Contains the concrete operators a derivation is built from: the normal-ordered Hamiltonian, the excitation/de-excitation operators, the projection manifolds, and the orbital-rotation generator."""
 
 from fractions import Fraction
+from math import factorial
 
 from .operators import cre, ann
 from .operators import Integral, block
@@ -24,6 +25,67 @@ _DOUBLES_SYM = (((1, 0, 2, 3), -1), ((0, 1, 3, 2), -1))
 # an antisymmetric matrix). Mode-independent -- it is the definition of the
 # parameter, not a Hermiticity relation.
 _KAPPA_SYM = (((1, 0), -1),)
+
+
+# --- the general operator primitive ------------------------------------------
+
+def O_N(name, creators, annihilators, tensor_indices=None, symmetry=(), prefactor=None):
+    """A general normal-ordered operator: a factor times a string of creators and annihilators.
+
+    Parameters
+    ----------
+    name : str or None
+        Name of the tensor factor (integral or amplitude). ``None`` builds a bare
+        operator string with no factor, i.e. a projection manifold.
+    creators : sequence of (str, str)
+        The creation operators as ``(label, space)`` pairs, written a_label^ in the
+        given order.
+    annihilators : sequence of (str, str)
+        The annihilation operators as ``(label, space)`` pairs. They are written in
+        REVERSED order in the string (a_qN ... a_q1) -- the normal-ordering
+        convention the two-electron operator and the doubles amplitude both use.
+    tensor_indices : tuple of str, optional
+        The index tuple the factor carries. Defaults to the creator labels followed
+        by the annihilator labels (the operator-natural order, as in <pq||rs>). Pass
+        it explicitly for a different convention, e.g. the amplitude t_ij^ab whose
+        occupied indices come first.
+    symmetry : tuple, optional
+        Permutational symmetry generators stamped on the factor (see ``operators.py``).
+    prefactor : int or Fraction, optional
+        The scalar prefactor. Defaults to 1/(n_c! n_a!), which is 1 for a one-body
+        operator and 1/4 for a two-body one -- the normalization that accompanies a
+        factor antisymmetrized in its upper and lower indices separately.
+
+    Returns
+    -------
+    Expression
+
+    Notes
+    -----
+    This is the primitive the named operators are special cases of. For example
+    ``F_N`` is ``O_N("f", [("p","gen")], [("q","gen")])``, ``V_N`` is
+    ``O_N("g", [("p","gen"),("q","gen")], [("r","gen"),("s","gen")], symmetry=...)``,
+    and a doubles excitation is
+    ``O_N(name, [("a","virt"),("b","virt")], [("i","occ"),("j","occ")],
+    tensor_indices=("i","j","a","b"), symmetry=...)``. Repeated operators must still
+    be given disjoint index labels by hand; kappa is NOT an instance of this (it is
+    the antisymmetric generator E_pq^-, a sum of two strings, not one).
+    """
+    creators = list(creators)
+    annihilators = list(annihilators)
+    ops = [cre(label, space) for label, space in creators]
+    ops += [ann(label, space) for label, space in reversed(annihilators)]
+
+    if prefactor is None:
+        prefactor = Fraction(1, factorial(len(creators)) * factorial(len(annihilators)))
+
+    integral = None
+    if name is not None:
+        if tensor_indices is None:
+            tensor_indices = tuple(label for label, _ in creators + annihilators)
+        integral = Integral(name, tuple(tensor_indices), symmetry)
+
+    return Expression.single(block(ops, integral), Fraction(prefactor))
 
 
 # --- the normal-ordered Hamiltonian ------------------------------------------
