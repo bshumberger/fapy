@@ -325,26 +325,29 @@ keeps the general `f_ov` (Brillouin) terms that Eq. 27 drops at canonical HF;
 `<0|[V_N, κ]|0>=0`).
 
 ### Desirable future features (not built)
-- **A generic N-body operator `O_N` as the primitive.** Most of the library is one
-  operator wearing different clothes: `F_N`/`singles` are one-body normal-ordered
-  strings, `V_N`/`doubles`/`doubles_dagger` two-body, differing *only* in (1) the
-  per-index spaces (gen/gen = Hamiltonian, virt/occ = excitation, occ/virt =
-  de-excitation), (2) the tensor name/symmetry (or its absence, for a manifold),
-  and (3) the prefactor, which is uniformly `1/(N!)²` (`1` for one-body, `¼` for
-  two-body). So a single
-  `O_N(name, [(p1,space),…], [(q1,space),…], symmetry=…)` reproduces F_N, V_N, all
-  excitations/de-excitations, and (with `name=None`) the bra/ket manifolds — and
-  delivers **user-defined custom operators** (below) for free.
-  *Recommended shape:* introduce `O_N` as the primitive but keep `F_N`/`V_N`/
-  `doubles`/… as thin named presets on top of it, rather than replacing the
-  library — the presets encode the conventions (reversed-annihilator order, the
-  `¼`, the `g`/amplitude antisymmetry) that would otherwise become per-input-file
-  footguns, and keep input files readable. *Caveats to handle:* (a) `kappa` is
-  **not** an `O_N` — it is a *sum of two* normal-ordered strings (the antisymmetric
-  generator `E_pq^-`) plus a `½`, so it stays a special constructor (Generality
-  constraint #1); (b) the real-mode Hermiticity symmetry currently keys on tensor
-  *name* (`_HERMITIAN_SYMMETRY` in `canonicalize.py`), so a freely-named tensor
-  needs its symmetry to travel **on the operator** instead of via the name table.
+- **Generic N-body operator `O_N` — primitive BUILT; presets refactor still open.**
+  Most of the library is one operator wearing different clothes: `F_N`/`singles`
+  are one-body normal-ordered strings, `V_N`/`doubles`/`doubles_dagger` two-body,
+  differing *only* in (1) the per-index spaces (gen/gen = Hamiltonian, virt/occ =
+  excitation, occ/virt = de-excitation), (2) the tensor name/symmetry (or its
+  absence, for a manifold), and (3) the prefactor, uniformly `1/(n_c! n_a!)` (`1`
+  one-body, `¼` two-body).
+  **Built:** `operator_library.O_N(name, creators, annihilators, tensor_indices=…,
+  symmetry=…, prefactor=…)` is the primitive — it writes creators then *reversed*
+  annihilators, defaults the tensor order to creators-then-annihilators and the
+  prefactor to `1/(n_c! n_a!)`, and with `name=None` builds a bare manifold.
+  `test_015` pins it down by rebuilding `F_N`/`V_N`/`singles`/`doubles`/`ket_doubles`
+  from it and asserting equality.
+  **Still open (the decision from the design chat):** whether to *re-express* the
+  named operators as thin presets on top of `O_N` (recommended — presets encode the
+  conventions so input files stay readable and footgun-free) or leave them as their
+  own definitions. Also delivers **user-defined custom operators** (below).
+  *Caveats when layering presets:* (a) `kappa` is **not** an `O_N` — it is a *sum of
+  two* normal-ordered strings (the antisymmetric generator `E_pq^-`) plus a `½`, so
+  it stays a special constructor (Generality constraint #1); (b) the real-mode
+  Hermiticity symmetry currently keys on tensor *name* (`_HERMITIAN_SYMMETRY` in
+  `canonicalize.py`), so a freely-named tensor needs its symmetry to travel **on the
+  operator** instead of via the name table.
 - **User-defined custom operators.** Today a problem composes only the built-in
   operators. Letting an input file declare a *new* operator (its creation/
   annihilation string, prefactor, amplitude tensor, and symmetry) would make the
@@ -353,6 +356,20 @@ keeps the general `f_ov` (Brillouin) terms that Eq. 27 drops at canonical HF;
   and falls out of the generic `O_N` primitive above.
 - **Automatic dummy relabeling** so repeated operators (e.g. `T1*T1`,
   `[[H,T2],T2]`) need not be given disjoint index labels by hand.
+- **Contracting genuinely non-normal-ordered operators.** Every operator today is
+  normal-ordered (all quasi-particle annihilators right of all creators) and the
+  default `normal_ordered_blocks` policy forbids same-block (intra-operator)
+  contractions — the generalized Wick theorem. A non-normal-ordered operator (e.g.
+  Hald's `E_pq^-`, a raw `a_p^ a_q`, or any operator whose own creators/annihilators
+  are interleaved) needs its *own* operators to be allowed to self-contract, i.e. a
+  policy that permits intra-block pairs for that operator. `contract_all` does this
+  for a whole raw string, but only for a string carrying that single policy. The
+  general fix is the **per-block / block-aware `may_contract`** in the next item, so
+  a non-normal-ordered operator can carry an intra-contracting rule while the rest
+  of the product stays normal-ordered. Until then `kappa` is the only such operator
+  handled, and only because it is expressible as a *difference of two normal-ordered
+  blocks* (its δ pieces cancel) — a luxury other non-normal-ordered operators lack.
+  Ties to Generality constraint #1 and the policy conflict below.
 - **Mixed contraction policies in a product (the policy conflict).**
   `Expression.__mul__` refuses to multiply two terms whose `policy` differs,
   because a product merges their blocks into one operator string and a single
