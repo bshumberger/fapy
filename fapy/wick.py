@@ -106,17 +106,13 @@ class Term:
         return f"{sign}{abs(self.coefficient)} {body}"
 
 
-def contract_blocks(*blocks, policy=normal_ordered_blocks, externals=()):
+def contract_blocks(*blocks, externals=()):
     """Contract a set of factor-carrying blocks into a list of terms.
 
     Parameters
     ----------
     *blocks : OperatorBlock
         The blocks to contract, in left-to-right order.
-    policy : callable, optional
-        Contraction policy ``may_contract(op_a, op_b) -> bool`` deciding which
-        pairs are eligible to contract. Defaults to the generalized-Wick
-        ``normal_ordered_blocks``.
     externals : iterable of str, optional
         Labels fixed by a projection manifold, kept as class representatives during
         resolution so a projection's indices survive rather than being renamed onto
@@ -130,27 +126,39 @@ def contract_blocks(*blocks, policy=normal_ordered_blocks, externals=()):
     Notes
     -----
     The blocks are flattened into one operator string, each stamped with its own
-    group index so the policy can tell which operators shared a block. Every
-    surviving full contraction is resolved into equivalence classes, the
-    resolution map relabels the factors gathered from the blocks, and the
-    fermionic sign becomes the term's coefficient. A contraction that asks one
-    index class to be both occupied and virtual is impossible and is dropped.
+    group index. The contraction rule is read straight off the blocks: operators
+    from different blocks always may contract, while operators sharing a block may
+    only if that block is not normal-ordered (see ``OperatorBlock.normal_ordered``).
+    So a normal-ordered operator and a non-normal-ordered one can be contracted in
+    one product without a shared global policy. Every surviving full contraction is
+    resolved into equivalence classes, the resolution map relabels the factors
+    gathered from the blocks, and the fermionic sign becomes the term's coefficient.
+    A contraction that asks one index class to be both occupied and virtual is
+    impossible and is dropped.
     """
     # Flatten the blocks into one tagged operator string and collect the factors
-    # in block order so the resulting term lists them left to right.
+    # in block order so the resulting term lists them left to right; record each
+    # block's normal-ordering by its group index.
     combined = []
     integrals = []
+    normal_ordered = {}
     for g_idx, blk in enumerate(blocks):
         combined.extend(group_string(list(blk.ops), g_idx))
+        normal_ordered[g_idx] = blk.normal_ordered
         if blk.integral is not None:
             integrals.append(blk.integral)
+
+    # The contraction rule: different blocks always may contract; a same-block pair
+    # only if that block is non-normal-ordered (its operators may self-contract).
+    def may_contract(a, b):
+        return a.group != b.group or not normal_ordered[a.group]
 
     # Remember declared spaces so resolution prefers concrete representatives.
     declared = declared_spaces(combined)
 
     # Run the contraction and turn each surviving matching into a Term.
     terms = []
-    for raw in wick_vev(combined, policy=policy):
+    for raw in wick_vev(combined, policy=may_contract):
         resolved = resolve_term(raw, declared, externals)
         if resolved is None:
             continue

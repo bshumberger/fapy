@@ -110,19 +110,20 @@ The full surface of the build-phase is:
   - `Expression` — a sum of `ExprTerm`s
     - constructors: `single`, `identity`, `zero`
     - algebra: `__mul__`, `__add__`, `__sub__`, `__neg__`, `scale`, `__rmul__`
-  - `ExprTerm` — coefficient × ordered product of blocks + policy
+  - `ExprTerm` — coefficient × ordered product of blocks
   - `commutator`, `left_nested_commutator`, `right_nested_commutator`
 - **`operator_library.py`**
+  - `O_N` — the general operator primitive (any normal- or non-normal-ordered operator)
   - Hamiltonian: `F_N`, `V_N`, `H_N`
   - excitations `singles`, `doubles`; de-excitations `singles_dagger`, `doubles_dagger`
   - manifolds: `reference`, `bra_singles`, `ket_singles`, `bra_doubles`, `ket_doubles`
-  - `kappa` — orbital-rotation generator
+  - `kappa` — orbital-rotation generator; `scalar` — a named index-free factor (e.g. E_corr)
   - tensor-symmetry generators: `_INTEGRAL_SYM`, `_DOUBLES_SYM`, `_KAPPA_SYM`
 - **`operators.py`**
   - `Operator` — `label`, `dagger`, `space`, `group`; constructors `cre` / `ann`;
     `Space` alias
   - `Integral` — `name`, `indices`, `symmetry`
-  - `OperatorBlock` — `ops` + `integral`; constructor `block`
+  - `OperatorBlock` — `ops` + `integral` + `normal_ordered`; constructor `block`
 
 **Evaluation phase**
 
@@ -135,12 +136,13 @@ Problem.report()
 ├─ Problem.derive()
 │   ├─ bra * expr * ket              Expression.__mul__       form the sandwich Expression
 │   ├─ Expression.vev()                                       → Terms  (loops over ExprTerm)
-│   │   └─ contract_blocks(*blocks, policy)   (wick.py)
+│   │   └─ contract_blocks(*blocks)          (wick.py)
 │   │       ├─ group_string(...)              (operators.py)  flatten blocks → tagged string
+│   │       │                                 (derive may_contract from each block's normal_ordered flag)
 │   │       ├─ declared_spaces(...)           (resolve.py)    label → declared space
-│   │       ├─ wick_vev(ops, policy)          (wick.py)       → raw [{sign, deltas}]
+│   │       ├─ wick_vev(ops, may_contract)    (wick.py)       → raw [{sign, deltas}]
 │   │       │   ├─ recursive_generator(...)   (contraction.py)  all (2n-1)!! matchings
-│   │       │   ├─ policy(a, b)               (policy.py)       eligible pair?
+│   │       │   ├─ may_contract(a, b)                           eligible pair? (per-block rule)
 │   │       │   ├─ contraction(a, b)          (contraction.py)  nonzero delta?
 │   │       │   └─ fermion_sign(pairs)        (contraction.py)  permutation sign
 │   │       ├─ resolve_term(raw, declared)    (resolve.py)    → ResolvedTerm (rep, spaces)

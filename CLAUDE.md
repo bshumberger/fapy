@@ -128,10 +128,17 @@ and the end-to-end call flow — start there to navigate.**
 
 ### Generalized Wick theorem
 Operators inside one normal-ordered `{...}` block never contract with each other.
-Enforced by the `group` field plus the **contraction policy** (`policy.py`): the
-default `normal_ordered_blocks` forbids same-group pairs; `contract_all` permits
-everything (a single raw string). The policy is a supplied `may_contract(a, b)`
-callable, kept separate from the elementary rule (ties to Generality constraint #1).
+This is now a **per-block property**: `OperatorBlock.normal_ordered` (default True).
+`contract_blocks` reads the flag off each block and builds the rule
+`may_contract(a, b) = a.group != b.group or not normal_ordered[a.group]` — different
+blocks always may contract; a same-block pair only if that block is
+non-normal-ordered (its operators may self-contract). The kernel `wick_vev` still
+takes a `may_contract(a, b)` callable (the clean low-level seam), and `policy.py`
+keeps `normal_ordered_blocks`/`contract_all` as the two extremes for direct
+`wick_vev` use. Because the rule lives on the block, a non-normal-ordered operator
+and a normal-ordered one can sit in one product with no shared global policy — the
+former "policy conflict" is gone. Build a non-normal-ordered operator with
+`O_N(..., normal_ordered=False)` (ties to Generality constraint #1).
 
 ### Verified behavior
 - All `(2n-1)!!` matchings generated, no duplicates; each covers every position once.
@@ -164,12 +171,52 @@ Candidates to examine (not yet audited):
 - **`gen`/`gen` contraction resolves to `occ`** by branch order in `contraction`
   (`matches_space_dagger`) when both operators are general. Verify that is always
   what's wanted.
-- **Disjoint dummy labels** are assumed for repeated operators — no auto-relabel, so
-  a reused label silently collides.
-- **Externals come only from `bra`/`ket`** — an `expr` operator carrying an
-  externally-meant index would be treated as summed.
+- **[FIXED] Disjoint dummy labels** are no longer assumed for repeated operators.
+  Indices are now free (external) or bound (summed); `Expression.__mul__` is
+  capture-avoiding, alpha-renaming a colliding *bound* label of one factor to a fresh
+  reserved label (`o#/v#/g#`) and never touching *free* ones. So `T1*T1`,
+  `[[H,T],T]`, `exp(T)`, any repeated operator, just work — no hand-assigned disjoint
+  labels. See "Free/bound index hygiene" below.
+- **[FIXED] Externals are the free indices of the assembled expression**, not just
+  `bra`/`ket` labels. `Expression` carries a `free` set; manifolds and a density's
+  target operator declare their indices free; everything else is bound.
+  `Problem.external_indices()` reads `(bra*expr*ket).free`, so an *interior* target
+  operator (a density's `{p†q}`) contributes externals under the same rule as a
+  bra/ket manifold — no special `externals=` needed (it remains as a manual override).
 - **Baked-in real/Hermitian assumptions** — tensor symmetry was formerly real by
   default (now per-run); audit for any other place a reality assumption survives.
+
+---
+
+## Free/bound index hygiene
+
+Every index is either **free** (external, un-summed) or **bound** (a dummy summation
+private to its operator) — the standard bound-variable distinction. This is method-
+agnostic: the engine does correct index bookkeeping for *any* operator string (CI, CC,
+MPn, UCC, commutators, `exp(T)`, densities), not anything CC/CI-specific.
+
+- `Expression` carries `free: frozenset[str]`; every label in its terms not in `free`
+  is bound. `Expression.single(..., free=...)`, and `O_N(..., free=...)`, set it;
+  amplitudes/`H_N` are all-bound, manifolds and density targets declare their indices
+  free. `__add__` unions the frees.
+- `Expression.__mul__` is **capture-avoiding**: before concatenating two factors it
+  alpha-renames the *bound* labels that would collide — the right factor's bound labels
+  clashing with any label of the left, and the left's bound labels that would capture a
+  *free* of the right — to fresh space-hinted labels (`o#/v#/g#`, a reserved namespace
+  that can't collide with user single-letter labels and that `canonicalize` renames to
+  `O#/V#` anyway). Free labels are never renamed (shared frees are the same external, on
+  purpose). This *replaces* the old "raise on any shared label"; the capture it used to
+  guard against is now resolved correctly instead of rejected.
+- Because `commutator = a*b - b*a` and BCH/`exp(T)`/any ansatz build on `*`, they all
+  inherit capture-avoidance. `left_nested_commutator(H_N, T, T, T, T)` with a *single*
+  `T` object works; so does a direct `Fraction(1,2)*T1*T1`.
+- **Externals = the frees of `bra*expr*ket`** (`Problem.external_indices()`), which
+  unifies bra/ket manifold externals with a density's interior target-operator externals
+  under one rule. `one_body(p,q)`/`two_body(p,q,r,s)` build bare `{p†q}`/`{p†q†sr}`
+  density targets (over `O_N(None, …)`) with their indices declared free.
+- Regression: `test_017_index_hygiene.py` (shared-`T` commutator ≡ hand-disjoint,
+  frees preserved / capture avoided, metadata preserved, externals inferred from an
+  interior target).
 
 ---
 
@@ -228,7 +275,11 @@ features to build now.
    hardwired to mean "normal-ordered block."
    → Replace `group: int` with an explicit **contraction policy**:
    `may_contract(op_a, op_b) -> bool`, supplied with the string. Normal-ordered
-   blocks become one policy among several.
+   blocks become one policy among several. *(Done, and refined further: the rule now
+   lives on each block as `OperatorBlock.normal_ordered`, from which `contract_blocks`
+   derives the `may_contract` closure — so a non-normal-ordered operator can be built
+   directly, `O_N(..., normal_ordered=False)`, and multiplied with normal-ordered
+   ones. `kappa` remains a difference of two blocks, since `E_pq^-` is a sum.)*
 
 2. **Commutators and similarity transforms.** Hald uses `[H, tau_nu]`,
    `[[H, E_pq^-], T_2]`, `exp(-T) H exp(T)` throughout (Eqs. 41–45).
@@ -244,12 +295,18 @@ features to build now.
    → `Term.integrals` must be a **list**, never fixed `amplitude`/`integral`
    slots. *(Satisfied: `Term.integrals`/`CanonicalTerm.integrals` are lists.)*
 
-### Explicitly out of scope for now
-**Spin adaptation.** Hald works closed-shell spin-adapted (`E_pq`,
+### Spin adaptation — a planned future direction (not near-term)
+**Spin adaptation** is now a **future implementation goal**, not permanently out of
+scope. Hald works closed-shell spin-adapted (`E_pq`,
 `L_pqrs = 2g_pqrs - g_psrq`); `main.pdf` is spin-orbital. These are different
-formalisms. Build spin-orbital only. Keep the layering clean enough that spin
-adaptation could sit on top later, but do not attempt both at once — that is
-where the design would collapse.
+formalisms. **For now build spin-orbital only** — the current engine, tests, and
+worked methods are all spin-orbital, and mixing the two mid-build is where the design
+would collapse. The intent is to add spin adaptation *as a layer on top* of the
+finished spin-orbital core once it is solid: the free/bound index model and per-index
+spaces are deliberately general enough that spin-summed operators (`E_pq`, `L_pqrs`)
+could be introduced as new operator-library constructors + a spin-space, without
+touching the kernel. Sequencing: complete/validate spin-orbital first, then add spin
+adaptation; do not attempt both at once.
 
 Analytic gradients, triples, and multipliers are far past CC energy and
 amplitudes. Not a near-term target.
@@ -354,41 +411,31 @@ keeps the general `f_ov` (Brillouin) terms that Eq. 27 drops at canonical HF;
   engine fully general. Symmetry already travels on the `Integral` (annotation
   carried by the operator constructors), so this is the natural next extension —
   and falls out of the generic `O_N` primitive above.
-- **Automatic dummy relabeling** so repeated operators (e.g. `T1*T1`,
-  `[[H,T2],T2]`) need not be given disjoint index labels by hand.
-- **Contracting genuinely non-normal-ordered operators.** Every operator today is
-  normal-ordered (all quasi-particle annihilators right of all creators) and the
-  default `normal_ordered_blocks` policy forbids same-block (intra-operator)
-  contractions — the generalized Wick theorem. A non-normal-ordered operator (e.g.
-  Hald's `E_pq^-`, a raw `a_p^ a_q`, or any operator whose own creators/annihilators
-  are interleaved) needs its *own* operators to be allowed to self-contract, i.e. a
-  policy that permits intra-block pairs for that operator. `contract_all` does this
-  for a whole raw string, but only for a string carrying that single policy. The
-  general fix is the **per-block / block-aware `may_contract`** in the next item, so
-  a non-normal-ordered operator can carry an intra-contracting rule while the rest
-  of the product stays normal-ordered. Until then `kappa` is the only such operator
-  handled, and only because it is expressible as a *difference of two normal-ordered
-  blocks* (its δ pieces cancel) — a luxury other non-normal-ordered operators lack.
-  Ties to Generality constraint #1 and the policy conflict below.
-- **Mixed contraction policies in a product (the policy conflict).**
-  `Expression.__mul__` refuses to multiply two terms whose `policy` differs,
-  because a product merges their blocks into one operator string and a single
-  string can carry only one policy — there is no mechanism to combine two
-  `may_contract` rules for the joined string. Consequently a genuinely
-  non-normal-ordered operator (one needing, say, `contract_all` so its own
-  operators may self-contract) cannot be multiplied with a normal-ordered
-  operator like `F_N`. Today `kappa` sidesteps this by being built as the
-  *difference of two normal-ordered blocks* — exact for the antisymmetric
-  `E_pq^-` because the reference-contraction (δ) pieces cancel — so it shares the
-  `normal_ordered_blocks` policy and never trips the guard. Other
-  non-normal-ordered operators won't have that luxury. The fix is to make
-  policies composable, most likely a **per-block / block-aware `may_contract`**
-  so a product can apply the right rule to each block's operators (ties to
-  Generality constraint #1). **Revisit this.**
+- **[DONE] Automatic dummy relabeling** so repeated operators (e.g. `T1*T1`,
+  `[[H,T2],T2]`) need not be given disjoint index labels by hand. Solved generally by
+  the **free/bound index model + capture-avoiding `Expression.__mul__`** (see
+  "Free/bound index hygiene" above and `test_017`): bound (summed) labels are
+  alpha-renamed on every product, free (external) ones are preserved. Not a
+  commutator-specific hook — it is correct index bookkeeping for any operator string.
+- **[DONE] Contracting non-normal-ordered operators / the policy conflict.** Both
+  are resolved by the **per-block `OperatorBlock.normal_ordered` flag** (see
+  "Generalized Wick theorem" above and `test_016`): the contraction rule is read off
+  each block, so a non-normal-ordered operator self-contracts *and* multiplies freely
+  with a normal-ordered one — the single-global-policy conflict is gone.
+  `O_N(..., normal_ordered=False)` builds one. `kappa` stays a difference of two
+  normal-ordered blocks (it is `E_pq^-`, a sum, not one block); it need not change.
 - **Surviving Kronecker deltas between two externals.** Resolution *spends* every
   delta. When a delta identifies two **external** indices (e.g. `δ_ik` with `i`
   from the bra and `k` from the ket), it can't be spent — both must survive — so it
-  should be **emitted as an explicit `δ` in the output**. Not built. Only needed for
+  should be **emitted as an explicit `δ` in the output**. Not built. **Arises ONLY in
+  a genuine two-sided matrix element** `⟨Φ_μ|H̄|Φ_ν⟩` (externals on *both* the bra and
+  the ket, so a bra-external can contract a ket-external), and there the δ is
+  **nonzero** — the Jacobian diagonal, e.g. `(ε_a−ε_i) δ_ik δ_ac` — so it must be
+  emitted, never zeroed. It does **not** arise in any one-sided derivation (energy,
+  T-/Λ-amplitudes, densities): two externals on a *single* operator can't self-contract,
+  so each pairs with a distinct summed index. (The HF density block `δ_pq δ_occ` comes
+  from the *non-normal-ordered* `a†_p a_q`, not the normal-ordered density derivative,
+  whose reference expectation is zero — so it is not this feature.) Only needed for
   an explicit two-sided matrix element `⟨Φ_μ|H̄|Φ_ν⟩` with externals on both sides
   (an EOM Jacobian); the sigma-vector EOM form (`⟨Φ_μ|H̄R|0⟩`) and the Hessian avoid
   it, so it's orthogonal to the externals-through-resolution fix.

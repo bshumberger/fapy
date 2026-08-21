@@ -22,9 +22,8 @@ class Operator:
         label, and read by the contraction rules and by delta resolution.
     group : int
         Block the operator belongs to. Operators sharing a group belong to the
-        same block; whether they may contract with one another is up to the
-        contraction policy (the default forbids it, treating the block as
-        normal-ordered).
+        same block; whether they may contract with one another depends on that
+        block's ``normal_ordered`` flag (normal-ordered blocks forbid it).
 
     Notes
     -----
@@ -169,20 +168,25 @@ class OperatorBlock:
     ----------
     ops : tuple of Operator
         The block's operators. They are re-stamped with a fresh group tag when
-        contracted, so a policy can tell which operators shared a block. Whether
-        operators within a block may contract with one another is up to the
-        contraction policy, not the block itself: the default
-        ``normal_ordered_blocks`` forbids it, so the block behaves as a
-        normal-ordered {..}, while ``contract_all`` permits it.
+        contracted, so the kernel can tell which operators shared a block.
     integral : Integral, optional
         The factor multiplying the block, or None for a bare block such as a
         projection manifold that carries no factor of its own.
+    normal_ordered : bool
+        Whether the block is normal-ordered. When True (the default) its own
+        operators never contract with one another (the generalized Wick theorem),
+        so it behaves as a normal-ordered {..}. When False the block is not in
+        normal form, so its operators are free to self-contract. Either way,
+        operators from different blocks always may contract. ``contract_blocks``
+        reads this flag off each block to build the contraction rule, so a
+        non-normal-ordered operator and a normal-ordered one can sit in one product.
     """
     ops: Tuple[Operator, ...]
     integral: Optional[Integral] = None
+    normal_ordered: bool = True
 
 
-def block(ops, integral=None):
+def block(ops, integral=None, normal_ordered=True):
     """Build an ``OperatorBlock`` from a list of operators.
 
     Parameters
@@ -191,9 +195,12 @@ def block(ops, integral=None):
         The operators forming the block.
     integral : Integral, optional
         The factor, or None for a bare block.
+    normal_ordered : bool, optional
+        Whether the block is normal-ordered (default True). Pass False for a block
+        whose own operators may self-contract (a non-normal-ordered operator).
 
     Returns
     -------
     OperatorBlock
     """
-    return OperatorBlock(tuple(ops), integral)
+    return OperatorBlock(tuple(ops), integral, normal_ordered)

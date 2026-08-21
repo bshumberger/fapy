@@ -6,33 +6,6 @@ from .expression import Expression
 from .canonicalize import canonicalize, format_canonical
 
 
-def _external_labels(manifold):
-    """Collect every index label carried by a manifold's operators.
-
-    Parameters
-    ----------
-    manifold : Expression
-        A projection manifold (a bra or ket).
-
-    Returns
-    -------
-    set
-        The labels of every operator in every block of the manifold.
-
-    Notes
-    -----
-    A projection manifold like ``<Phi_ij^ab|`` contributes operators on the fixed
-    labels i, j, a, b -- exactly the external indices of the problem. The reference
-    manifold contributes no operators, hence no externals.
-    """
-    labels = set()
-    for term in manifold.terms:
-        for blk in term.blocks:
-            for op in blk.ops:
-                labels.add(op.label)
-    return labels
-
-
 @dataclass
 class Problem:
     """A user-defined derivation: the collected value of <bra| expr |ket>.
@@ -79,13 +52,15 @@ class Problem:
 
         Notes
         -----
-        Externals are held fixed during collection (they are not summed dummies),
-        so they are exactly the labels the projection manifolds pin down.
+        Externals are held fixed during collection (they are not summed dummies).
+        They are the free (external) indices the assembled ``bra * expr * ket``
+        carries -- normally supplied by the bra/ket projection manifolds, but equally
+        by a target operator sitting inside ``expr`` (as in a density), so the same
+        rule covers both without special-casing.
         """
         if self.externals is not None:
             return tuple(self.externals)
-        both = _external_labels(self.bra) | _external_labels(self.ket)
-        return tuple(sorted(both))
+        return tuple(sorted((self.bra * self.expr * self.ket).free))
 
     def derive(self):
         """Contract, resolve, and collect the problem into canonical terms.

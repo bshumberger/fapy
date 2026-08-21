@@ -29,8 +29,9 @@ _KAPPA_SYM = (((1, 0), -1),)
 
 # --- the general operator primitive ------------------------------------------
 
-def O_N(name, creators, annihilators, tensor_indices=None, symmetry=(), prefactor=None):
-    """A general normal-ordered operator: a factor times a string of creators and annihilators.
+def O_N(name, creators, annihilators, tensor_indices=None, symmetry=(), prefactor=None,
+        normal_ordered=True, free=()):
+    """A general operator: a factor times a string of creators and annihilators.
 
     Parameters
     ----------
@@ -55,6 +56,15 @@ def O_N(name, creators, annihilators, tensor_indices=None, symmetry=(), prefacto
         The scalar prefactor. Defaults to 1/(n_c! n_a!), which is 1 for a one-body
         operator and 1/4 for a two-body one -- the normalization that accompanies a
         factor antisymmetrized in its upper and lower indices separately.
+    normal_ordered : bool, optional
+        Whether the operator is normal-ordered (default True). Pass False to build a
+        non-normal-ordered operator whose own creators/annihilators may self-contract
+        (see ``OperatorBlock.normal_ordered``).
+    free : iterable of str, optional
+        Index labels to declare external (free). Defaults to none -- all indices are
+        summed dummies. Set it for a density's target operator, e.g.
+        ``O_N(None, [("p","gen")], [("q","gen")], free=("p","q"))``, so p, q survive
+        resolution as externals wherever the operator sits.
 
     Returns
     -------
@@ -85,7 +95,9 @@ def O_N(name, creators, annihilators, tensor_indices=None, symmetry=(), prefacto
             tensor_indices = tuple(label for label, _ in creators + annihilators)
         integral = Integral(name, tuple(tensor_indices), symmetry)
 
-    return Expression.single(block(ops, integral), Fraction(prefactor))
+    return Expression.single(
+        block(ops, integral, normal_ordered=normal_ordered), Fraction(prefactor), free=free
+    )
 
 
 # --- the normal-ordered Hamiltonian ------------------------------------------
@@ -268,6 +280,31 @@ def scalar(name):
     return Expression.single(block([], Integral(name, ())), Fraction(1))
 
 
+def zero_scalar(name):
+    """A named scalar factor equal to zero carrying no indices, e.g. the zeroth- and
+       first-order perturbation energy.
+
+    Parameters
+    ----------
+    name : str
+        Name of the scalar factor (e.g. "E_corr").
+
+    Returns
+    -------
+    Expression
+        One term of coefficient 0 whose single block has no operators but carries
+        an index-free factor.
+
+    Notes
+    -----
+    This is the scalar of value zero with a named factor attached: it contributes nothing
+    but nullifies surviving operator contractions, so it simply rides through the pipeline
+    into every surviving term and zeros them. It exists to state terms in very general
+    expressions that are non-contributors -- MP2 Lagrangian includes these terms as part of
+    the constraint equation. 
+    """
+    return Expression.single(block([], Integral(name, ())), Fraction(0))
+
 # --- projection manifolds (reference and excited determinants) ----------------
 
 def reference():
@@ -302,7 +339,9 @@ def bra_singles(i, a):
     -------
     Expression
     """
-    return Expression.single(block([cre(i, "occ"), ann(a, "virt")]), Fraction(1))
+    return Expression.single(
+        block([cre(i, "occ"), ann(a, "virt")]), Fraction(1), free=(i, a)
+    )
 
 
 def ket_singles(i, a):
@@ -319,7 +358,9 @@ def ket_singles(i, a):
     -------
     Expression
     """
-    return Expression.single(block([cre(a, "virt"), ann(i, "occ")]), Fraction(1))
+    return Expression.single(
+        block([cre(a, "virt"), ann(i, "occ")]), Fraction(1), free=(i, a)
+    )
 
 
 def bra_doubles(i, j, a, b):
@@ -339,6 +380,7 @@ def bra_doubles(i, j, a, b):
     return Expression.single(
         block([cre(i, "occ"), cre(j, "occ"), ann(b, "virt"), ann(a, "virt")]),
         Fraction(1),
+        free=(i, j, a, b),
     )
 
 
@@ -359,6 +401,61 @@ def ket_doubles(i, j, a, b):
     return Expression.single(
         block([cre(a, "virt"), cre(b, "virt"), ann(j, "occ"), ann(i, "occ")]),
         Fraction(1),
+        free=(i, j, a, b),
+    )
+
+
+# --- density target operators (bare one-/two-body strings) --------------------
+
+def one_body(p, q, spaces=("gen", "gen"), free=True):
+    """The one-body string {a_p^ a_q} with no tensor -- a density target.
+
+    This is what ``d/df_pq`` leaves behind: the operator whose expectation value is
+    the one-particle density D_pq. By default p, q are declared external (free), so
+    they survive resolution as the density's target indices wherever the string sits
+    (interior of a similarity transform, with a reference bra and ket).
+
+    Parameters
+    ----------
+    p, q : str
+        The target indices.
+    spaces : (str, str), optional
+        The orbital spaces of p and q. Default ("gen", "gen"); pass a specific block,
+        e.g. ("occ", "occ") for the occupied-occupied block D_ij.
+    free : bool, optional
+        Whether p, q are external (default True). False makes them summed.
+
+    Returns
+    -------
+    Expression
+    """
+    sp, sq = spaces
+    return O_N(None, [(p, sp)], [(q, sq)], free=(p, q) if free else ())
+
+
+def two_body(p, q, r, s, spaces=("gen", "gen", "gen", "gen"), free=True):
+    """The two-body string (1/4){a_p^ a_q^ a_s a_r} with no tensor -- a density target.
+
+    This is what ``d/d<pq||rs>`` leaves behind (the 1/4 is the ``O_N`` default for a
+    two-body operator): the operator whose expectation value is the two-particle
+    density D_pqrs. By default p, q, r, s are external (free).
+
+    Parameters
+    ----------
+    p, q, r, s : str
+        The target indices, ordered as in <pq||rs>.
+    spaces : (str, str, str, str), optional
+        The orbital spaces of p, q, r, s. Default all "gen".
+    free : bool, optional
+        Whether the four indices are external (default True).
+
+    Returns
+    -------
+    Expression
+    """
+    sp, sq, sr, ss = spaces
+    return O_N(
+        None, [(p, sp), (q, sq)], [(r, sr), (s, ss)], free=(p, q, r, s) if free else ()
     )
 
 

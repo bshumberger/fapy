@@ -14,7 +14,6 @@ introduced and no coupled-cluster result downstream can be trusted.
 """
 
 from fapy import cre, ann
-from fapy.policy import contract_all
 from fapy.operators import Integral, block
 from fapy.wick import contract_blocks
 
@@ -53,10 +52,14 @@ def test_fock_self_contraction_gives_trace():
     normal-ordered remainder. We check the constant piece: a single term, sign
     +1, with both tensor indices collapsed onto one occupied index.
     """
-    f_block = block([cre("p", "gen"), ann("q", "gen")], Integral("f", ("p", "q")))
+    # The block is non-normal-ordered, so its two operators may self-contract.
+    f_block = block(
+        [cre("p", "gen"), ann("q", "gen")],
+        Integral("f", ("p", "q")),
+        normal_ordered=False,
+    )
 
-    # Use contract_all so the two operators inside the one block may contract.
-    terms = contract_blocks(f_block, policy=contract_all)
+    terms = contract_blocks(f_block)
 
     assert len(terms) == 1
     term = terms[0]
@@ -81,9 +84,10 @@ def test_two_electron_double_contraction_sign_pin():
     g_block = block(
         [cre("p", "gen"), cre("q", "gen"), ann("s", "gen"), ann("r", "gen")],
         Integral("g", ("p", "q", "r", "s")),
+        normal_ordered=False,
     )
 
-    terms = contract_blocks(g_block, policy=contract_all)
+    terms = contract_blocks(g_block)
 
     # Exactly two fully contracted terms survive.
     assert len(terms) == 2
