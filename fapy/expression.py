@@ -194,9 +194,24 @@ class Expression:
     # --- additive structure ---------------------------------------------------
 
     def __add__(self, other):
-        # A sum concatenates the two lists of terms; the externals of a sum are the
-        # externals of either summand (terms of one equation share the same free set).
-        return Expression(self.terms + other.terms, free=self.free | other.free)
+        # A sum concatenates the two lists of terms. Terms of one equation share the
+        # same external (free) set. An empty operand (e.g. zero()) is free-agnostic
+        # and adopts the other's frees, so zero()-accumulation works. Two non-empty
+        # summands with different free sets are rejected: unioning them would silently
+        # promote a summed (bound) index of one to a held-fixed external, changing
+        # which contractions survive.
+        if not self.terms:
+            return Expression(list(other.terms), free=other.free)
+        if not other.terms:
+            return Expression(list(self.terms), free=self.free)
+        if self.free != other.free:
+            raise ValueError(
+                f"cannot add expressions with different external index sets "
+                f"{sorted(self.free)} and {sorted(other.free)}: a sum is terms of one "
+                "equation and must share externals (a mismatch would silently promote "
+                "a summed index to a held-fixed external)."
+            )
+        return Expression(self.terms + other.terms, free=self.free)
 
     def __neg__(self):
         # Negation flips the sign of every term's coefficient.

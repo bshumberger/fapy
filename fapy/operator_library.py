@@ -11,12 +11,22 @@ from .expression import Expression
 # --- permutational symmetries carried by the tensors --------------------------
 
 # (permutation, sign) generators stamped onto a tensor so its symmetry travels
-# with the operator. Only mode-independent symmetry lives here; the Hermiticity
-# symmetries (f_pq = f_qp, the pair exchange of <pq||rs>), which are real only,
-# are added per run in canonicalize.py. The Fock matrix carries none at all.
+# with the operator. Definitional (mode-independent) symmetry -- which follows from
+# relabelling the summed particle coordinates and holds for real and complex
+# orbitals alike -- goes in the ``symmetry`` slot below. The Hermiticity symmetries
+# (f_pq = f_qp, the pair exchange of <pq||rs>), which hold only for real orbitals,
+# go in the ``hermitian`` slot and are applied only in a "real" run; they too travel
+# on the tensor now, rather than being looked up by name in canonicalize.py.
 
-# <pq||rs>: antisymmetric in p<->q and r<->s.
+# <pq||rs>: antisymmetric in p<->q and r<->s (definitional).
 _INTEGRAL_SYM = (((1, 0, 2, 3), -1), ((0, 1, 3, 2), -1))
+
+# <pq||rs> = <rs||pq> (bra-ket pair exchange) -- Hermiticity, real orbitals only.
+_INTEGRAL_HERMITIAN = (((2, 3, 0, 1), 1),)
+
+# f_pq = f_qp -- Hermiticity, real orbitals only. The Fock matrix carries no
+# definitional symmetry at all.
+_FOCK_HERMITIAN = (((1, 0), 1),)
 
 # x_ij^ab: antisymmetric in i<->j and a<->b.
 _DOUBLES_SYM = (((1, 0, 2, 3), -1), ((0, 1, 3, 2), -1))
@@ -29,8 +39,8 @@ _KAPPA_SYM = (((1, 0), -1),)
 
 # --- the general operator primitive ------------------------------------------
 
-def O_N(name, creators, annihilators, tensor_indices=None, symmetry=(), prefactor=None,
-        normal_ordered=True, free=()):
+def O_N(name, creators, annihilators, tensor_indices=None, symmetry=(), hermitian=(),
+        prefactor=None, normal_ordered=True, free=()):
     """A general operator: a factor times a string of creators and annihilators.
 
     Parameters
@@ -51,7 +61,12 @@ def O_N(name, creators, annihilators, tensor_indices=None, symmetry=(), prefacto
         it explicitly for a different convention, e.g. the amplitude t_ij^ab whose
         occupied indices come first.
     symmetry : tuple, optional
-        Permutational symmetry generators stamped on the factor (see ``operators.py``).
+        Definitional (mode-independent) permutational symmetry generators stamped on
+        the factor (see ``operators.py``).
+    hermitian : tuple, optional
+        Hermiticity (real-orbital-only) symmetry generators stamped on the factor,
+        applied only in a "real" run. Set it for a Fock/ERI-type tensor so its
+        Hermiticity travels with the operator instead of being looked up by name.
     prefactor : int or Fraction, optional
         The scalar prefactor. Defaults to 1/(n_c! n_a!), which is 1 for a one-body
         operator and 1/4 for a two-body one -- the normalization that accompanies a
@@ -93,7 +108,7 @@ def O_N(name, creators, annihilators, tensor_indices=None, symmetry=(), prefacto
     if name is not None:
         if tensor_indices is None:
             tensor_indices = tuple(label for label, _ in creators + annihilators)
-        integral = Integral(name, tuple(tensor_indices), symmetry)
+        integral = Integral(name, tuple(tensor_indices), symmetry, hermitian)
 
     return Expression.single(
         block(ops, integral, normal_ordered=normal_ordered), Fraction(prefactor), free=free
@@ -104,7 +119,10 @@ def O_N(name, creators, annihilators, tensor_indices=None, symmetry=(), prefacto
 
 # F_N = sum_pq f_pq {a_p^ a_q}
 F_N = Expression.single(
-    block([cre("p", "gen"), ann("q", "gen")], Integral("f", ("p", "q"))),
+    block(
+        [cre("p", "gen"), ann("q", "gen")],
+        Integral("f", ("p", "q"), hermitian=_FOCK_HERMITIAN),
+    ),
     Fraction(1),
 )
 
@@ -112,7 +130,7 @@ F_N = Expression.single(
 V_N = Expression.single(
     block(
         [cre("p", "gen"), cre("q", "gen"), ann("s", "gen"), ann("r", "gen")],
-        Integral("g", ("p", "q", "r", "s"), _INTEGRAL_SYM),
+        Integral("g", ("p", "q", "r", "s"), _INTEGRAL_SYM, hermitian=_INTEGRAL_HERMITIAN),
     ),
     Fraction(1, 4),
 )

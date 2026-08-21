@@ -118,20 +118,28 @@ class Integral:
         Ordered index labels. Order is significant -- g("p","q","r","s") differs
         from g("q","p","r","s") until symmetry is applied.
     symmetry : tuple
-        Permutational symmetry as a tuple of (permutation, sign) generators.
+        Definitional (mode-independent) permutational symmetry as a tuple of
+        (permutation, sign) generators. These follow from relabelling the summed
+        particle coordinates and hold for real and complex orbitals alike.
+    hermitian : tuple
+        Hermiticity (mode-dependent) symmetry, as (permutation, sign) generators,
+        applied only in a real-orbital run (e.g. f_pq = f_qp, <pq||rs> = <rs||pq>).
+        Like ``symmetry`` it travels with the object rather than being looked up by
+        name, so a freely-named Fock/ERI-type tensor is collected correctly.
 
     Notes
     -----
     Frozen and hashable, so it can key a dictionary when terms are collected.
-    ``symmetry`` travels with the object rather than being looked up by name,
-    which lets an amplitude be named anything and still be collected correctly; it
-    carries no identifying weight (two with the same name and indices are equal
-    regardless of it) and so is excluded from equality and hashing. The symmetry
-    is only recorded here -- it is applied later, during canonicalization.
+    ``symmetry``/``hermitian`` travel with the object rather than being looked up by
+    name, which lets an amplitude be named anything and still be collected correctly;
+    they carry no identifying weight (two with the same name and indices are equal
+    regardless of them) and so are excluded from equality and hashing. The symmetries
+    are only recorded here -- they are applied later, during canonicalization.
     """
     name: str
     indices: Tuple[str, ...]
     symmetry: Tuple = field(default=(), compare=False)
+    hermitian: Tuple = field(default=(), compare=False)
 
     def relabel_indices(self, rep):
         """Return a copy with each index relabelled through ``rep``.
@@ -145,12 +153,13 @@ class Integral:
         Returns
         -------
         Integral
-            A copy with indices relabelled and the symmetry preserved.
+            A copy with indices relabelled and both symmetries preserved.
         """
         return Integral(
             self.name,
             tuple(rep.get(i, i) for i in self.indices),
             self.symmetry,
+            self.hermitian,
         )
 
     def __repr__(self):

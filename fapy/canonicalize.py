@@ -73,19 +73,22 @@ def _tensor_generators(tensor, symmetry):
 
     Notes
     -----
-    The definitional (mode-independent) symmetry comes from the tensor's own
-    annotation if it has one -- so amplitudes and integrals built by the operator
-    library carry their antisymmetry regardless of name -- or from the name-keyed
-    fallback table for hand-built tensors. On top of that the Hermiticity symmetry
-    for the run mode is added by name: real orbitals give f_pq = f_qp and the
-    pair-exchange of <pq||rs>, while complex Hermitian adds nothing.
+    Both symmetries travel on the tensor. If the tensor carries any annotation (a
+    ``symmetry`` or a ``hermitian`` generator set), it is governed ENTIRELY by that
+    annotation: the definitional part from ``tensor.symmetry`` and, only in a "real"
+    run, the Hermiticity part from ``tensor.hermitian``. This is name-independent, so
+    a freely-named Fock/ERI-type tensor is collected correctly and a tensor that
+    merely reuses the name "f"/"g" is not given a Hermiticity it does not possess. The
+    name-keyed fallback tables are consulted only for a BARE hand-built tensor that
+    carries no annotation at all.
     """
-    definitional = (
-        list(tensor.symmetry) if tensor.symmetry
-        else list(_SYMMETRY_GENERATORS.get(tensor.name, []))
-    )
-    hermitian = _HERMITIAN_SYMMETRY.get(symmetry, {}).get(tensor.name, [])
-    return definitional + list(hermitian)
+    if tensor.symmetry or tensor.hermitian:
+        definitional = list(tensor.symmetry)
+        hermitian = list(tensor.hermitian) if symmetry == "real" else []
+    else:
+        definitional = list(_SYMMETRY_GENERATORS.get(tensor.name, []))
+        hermitian = list(_HERMITIAN_SYMMETRY.get(symmetry, {}).get(tensor.name, []))
+    return definitional + hermitian
 
 
 def _symmetry_orbit(generators, indices):
@@ -203,7 +206,10 @@ def _dummy_labels(term, external_set):
     -----
     Every index not held fixed as an external is a summed dummy; grouping them by
     resolved space ensures a renaming only ever maps an occupied dummy to an
-    occupied slot and a virtual dummy to a virtual slot.
+    occupied slot and a virtual dummy to a virtual slot. Resolution is expected to
+    have stamped every non-external index occ or virt; a summed index that reaches
+    here without a concrete space would be silently left un-renamed (behaving like an
+    external and blocking collection), so it is rejected loudly instead.
     """
     occ, virt = set(), set()
     for tensor in term.integrals:
@@ -215,6 +221,13 @@ def _dummy_labels(term, external_set):
                 occ.add(label)
             elif space == "virt":
                 virt.add(label)
+            else:
+                raise ValueError(
+                    f"summed index {label!r} has no resolved orbital space "
+                    f"(got {space!r}); every non-external index must resolve to "
+                    "'occ' or 'virt' before canonicalization -- an unresolved "
+                    "general index here would silently block term collection."
+                )
     return sorted(occ), sorted(virt)
 
 
@@ -276,17 +289,19 @@ def canonicalize_term(term, external_set, external_spaces, symmetry="complex"):
                 best_key = key
                 best_sign = sign
 
-    # Rebuild the resolved spaces for the canonical labels: the O/V slots are
-    # occupied/virtual by construction, and externals keep their known spaces.
+    # Rebuild the resolved spaces for the canonical labels: an external keeps its
+    # known space (checked FIRST, so an external spelled with a leading O/V is not
+    # misclassified by spelling), and the engine-minted O#/V# slots are occ/virt by
+    # construction.
     spaces = {}
     for _name, indices in best_key:
         for label in indices:
-            if label.startswith("O"):
+            if label in external_spaces:
+                spaces[label] = external_spaces[label]
+            elif label.startswith("O"):
                 spaces[label] = "occ"
             elif label.startswith("V"):
                 spaces[label] = "virt"
-            elif label in external_spaces:
-                spaces[label] = external_spaces[label]
     return best_key, best_sign, spaces
 
 

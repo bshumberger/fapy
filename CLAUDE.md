@@ -154,8 +154,9 @@ former "policy conflict" is gone. Build a non-normal-ordered operator with
 
 The engine has hidden assumptions that are **silently wrong when violated** — they
 don't raise, they just produce incorrect (often empty or mis-signed) output. The
-worst kind of bug. **TODO: sweep the code, flag each such assumption explicitly at
-its site, and correct or guard it.** The one that already bit us is the template:
+worst kind of bug. **A full pipeline audit was done** (kernel/sign, resolve/
+canonicalize, construction); the actionable items are now fixed or guarded (below).
+The one that already bit us is the template:
 
 - **[FIXED — the exemplar] Resolution assumed external < dummy lexically.**
   `resolve_term` chose class representatives by smallest label, so a projection
@@ -165,12 +166,33 @@ its site, and correct or guard it.** The one that already bit us is the template
   `i,j,a,b`, dummies `k,l,c,d`) passed by luck of the ordering. This is the shape to
   hunt for: **a correctness rule riding on an incidental label or ordering choice.**
 
-Candidates to examine (not yet audited):
-- **Overall sign** depends on block-flattening order (see Sign convention) — assumes
-  the caller passes blocks in expression order.
-- **`gen`/`gen` contraction resolves to `occ`** by branch order in `contraction`
-  (`matches_space_dagger`) when both operators are general. Verify that is always
-  what's wanted.
+Audit results (each examined; resolution noted):
+- **[AUDITED — not a defect] Overall sign depends on block-flattening order** (see Sign
+  convention). It is caller-determined *by design*: block order sets which operator is
+  left in each contraction, i.e. the physical hole-vs-particle direction. For particle-
+  conserving (even-operator-count) operators — all of them — reordering blocks yields a
+  *different valid* expression, not a spurious sign flip. Nothing to fix; the convention
+  is pinned by the MP2/CISD/CCSD sign-regression tests.
+- **[AUDITED — not a defect] `gen`/`gen` contraction space** in `contraction`
+  (`matches_space_dagger`): the two branches are dagger-gated and mutually exclusive, so
+  branch *order* is redundant — the space is fixed by the dagger pattern (creator-left →
+  `occ` hole line, annihilator-left → `virt` particle line), which is the physics. Each
+  ordering of two general operators yields exactly one line type; no contribution dropped.
+- **[FIXED] Hermiticity symmetry rode on the tensor *name*.** `canonicalize`'s real-mode
+  `f_pq=f_qp` / `<pq||rs>=<rs||pq>` were keyed by literal names `"f"`/`"g"`, so a freely-
+  named Fock/ERI was under-merged (duplicates) and a name collision over-merged with a
+  folded sign. Now Hermiticity travels on the tensor: `Integral.hermitian` (set by
+  `F_N`/`V_N`/`O_N`), read in `_tensor_generators`; the name tables are a fallback only
+  for a *bare* hand-built tensor (no annotation). Regression `test_018_hardening`.
+- **[GUARDED] A summed index that reaches canonicalization without an `occ`/`virt` space**
+  was silently left un-renamed (behaving like an external, blocking collection).
+  `_dummy_labels` now raises instead (`canonicalize.py`).
+- **[GUARDED] `Expression.__add__` unioned mismatched free sets**, silently promoting a
+  bound dummy to a held-fixed external. It now requires equal free sets (an empty operand
+  like `zero()` still adopts the other's frees).
+- **[HARDENED] External space read from spelling before the table.** `canonicalize`'s
+  space rebuild now checks the externals table before the `O#/V#` spelling, so an external
+  spelled with a leading uppercase `O`/`V` keeps its declared space.
 - **[FIXED] Disjoint dummy labels** are no longer assumed for repeated operators.
   Indices are now free (external) or bound (summed); `Expression.__mul__` is
   capture-avoiding, alpha-renaming a colliding *bound* label of one factor to a fresh
@@ -184,7 +206,9 @@ Candidates to examine (not yet audited):
   operator (a density's `{p†q}`) contributes externals under the same rule as a
   bra/ket manifold — no special `externals=` needed (it remains as a manual override).
 - **Baked-in real/Hermitian assumptions** — tensor symmetry was formerly real by
-  default (now per-run); audit for any other place a reality assumption survives.
+  default (now per-run); the real-only Hermiticity now travels on the tensor annotation
+  (see the [FIXED] item above) rather than a name table. No other reality assumption
+  found in the audit.
 
 ---
 
