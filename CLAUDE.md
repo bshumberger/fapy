@@ -447,15 +447,21 @@ keeps the general `f_ov` (Brillouin) terms that Eq. 27 drops at canonical HF;
 
 - `Operator` is frozen, so anything that "changes" an operator must rebuild it
   (see `group_string`).
-- `wick_vev` uses generate-and-filter: all `(2n-1)!!` matchings are generated,
-  then rejected. Fine through ~10 operators (945 matchings). Beyond that, prune
-  during generation.
-- The `break` on a failed pair is an early exit — one zero pair kills the whole
-  term. If debugging with prints, note that this suppresses output for the
-  remaining pairs in that matching.
-- The `assert lo < hi` in `wick_vev` documents an invariant guaranteed by
-  `recursive_generator` (it always emits ascending pairs). Asserts are stripped
-  under `python -O`; if that matters, promote to an explicit raise.
+- **[DONE] `wick_vev` prunes during generation.** It no longer generates all
+  `(2n-1)!!` matchings and filters; it is a depth-first search over perfect
+  matchings that pairs the leftmost unmatched position and only descends into a pair
+  the policy allows and that contracts nonzero, so a doomed sub-tree is never built.
+  Cost is proportional to the surviving contractions, not `(2n-1)!!`, which lifts the
+  old ~10-operator ceiling (e.g. the full quartic-commutator CCSD T2 residual, ~20+
+  operators, is now feasible). Exact-equivalent to the old enumerate-then-filter (same
+  surviving matchings, deltas, and sign) — validated by the whole suite staying green.
+  `recursive_generator` (in `contraction.py`) is retained but no longer used by
+  `wick_vev`.
+- Leftmost-unmatched pairing keeps every emitted pair ascending (`lo < hi`), so
+  `ops[lo]` is always the left operator — which `contraction` and the sign depend on.
+- Remaining slowness at high order is the **commutator/BCH expansion** generating many
+  product terms (disconnected orderings that cancel at `canonicalize`), not the kernel.
+  The next optimization is connected-only generation (skip disconnected contractions).
 
 ## Style
 - Prefer explicit declarations over inference (spaces, symmetries, policies).

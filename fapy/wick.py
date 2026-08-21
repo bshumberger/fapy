@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 from fractions import Fraction
 
-from .contraction import contraction, recursive_generator, fermion_sign
+from .contraction import contraction, fermion_sign
 from .policy import normal_ordered_blocks
 from .operators import group_string
 from .resolve import declared_spaces, resolve_term
@@ -41,6 +41,15 @@ def wick_vev(ops, policy=normal_ordered_blocks):
     within one ``{ }`` are already normal-ordered with respect to each other. Only
     fully contracted terms survive ``<Phi_0| ... |Phi_0>``, so this sums over every
     inter-group perfect matching. An odd-length string has no full contraction.
+
+    The perfect matchings are enumerated by a depth-first search that **prunes as it
+    generates**: it always pairs the leftmost unmatched position (so every emitted
+    pair is ascending, which both ``contraction`` and the sign depend on), and it
+    only descends into a pair the policy allows and that contracts nonzero. A doomed
+    sub-tree is therefore never built, rather than built and rejected -- so the cost
+    is proportional to the surviving contractions, not the full ``(2n-1)!!`` count.
+    This is exact: the set of fully-surviving matchings, their deltas, and the sign
+    (read off the completed pair list) are identical to enumerate-then-filter.
     """
     # A string with an odd number of operators has no full contraction.
     n = len(ops)
@@ -48,33 +57,46 @@ def wick_vev(ops, policy=normal_ordered_blocks):
         return []
 
     terms = []
-    for pair_string in recursive_generator(list(range(n))):
-        deltas = []
-        ok = True
-        for (lo, hi) in pair_string:
-            # recursive_generator emits ascending pairs, so ops[lo] is always the
-            # left operator -- which both contraction() and the sign depend on.
-            assert lo < hi, "Matching pairs must be ascending (left operator first)."
+    matched = [False] * n
+    pairs = []
+    deltas = []
 
-            # The policy prunes structurally ineligible pairs (the generalized-Wick
-            # default forbids block-mates); the elementary rule then decides whether
-            # an allowed pair is nonzero. One failed pair kills the whole matching.
+    def search():
+        # Pair the leftmost unmatched position; it is the left operator of its pair,
+        # so every pair is ascending (lo < hi).
+        lo = next((i for i in range(n) if not matched[i]), None)
+        if lo is None:
+            # A complete matching: record it, tagged with the permutation sign.
+            terms.append({"sign": fermion_sign(list(pairs)), "deltas": list(deltas)})
+            return
+
+        matched[lo] = True
+        for hi in range(lo + 1, n):
+            if matched[hi]:
+                continue
+            # Prune before descending: the policy rejects structurally ineligible
+            # pairs (the generalized-Wick default forbids block-mates), then the
+            # elementary rule rejects zero contractions. Either way the whole
+            # sub-tree hanging off this pair is skipped, never generated.
             if not policy(ops[lo], ops[hi]):
-                ok = False
-                break
+                continue
             c = contraction(ops[lo], ops[hi])
             if c is None:
-                ok = False
-                break
+                continue
 
             la, lb = c["delta"]
+            matched[hi] = True
+            pairs.append((lo, hi))
             deltas.append((la, lb, c["space"]))
 
-        # Keep only fully surviving matchings, tagged with the permutation sign.
-        if not ok:
-            continue
-        terms.append({"sign": fermion_sign(pair_string), "deltas": deltas})
+            search()
 
+            deltas.pop()
+            pairs.pop()
+            matched[hi] = False
+        matched[lo] = False
+
+    search()
     return terms
 
 
