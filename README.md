@@ -30,10 +30,14 @@ the MP2/CISD/CCSD energies and the MP2 amplitude numerator.
 problem in a short Python input file and it returns the collected equation.
 
 The core is **spin-orbital throughout**. **Spin adaptation is scoped to the
-closed-shell (RHF singlet) case only** and is planned as a **post-processing map
-over `.derive()` output** (spin summation of the finished spin-orbital
-equations) — it will not touch the kernel. Open-shell / higher-spin and native
-unitary-group (`E_pq`) operators are out of scope for now. Not yet built.
+closed-shell (RHF singlet) case only**, built as a **post-processing map over
+`.derive()` output** (`spin_adapt` in `fapy/spin_adapt.py`) — spin summation of
+the finished spin-orbital equations; it does not touch the kernel. Validated for
+CISD: the energy (notes eq 9), the singles residual (eq 10), and the doubles
+residual. The amplitude reduction is derived (antisymmetry + singlet relation),
+not tabulated, and is wired for rank ≤ 2 (singles/doubles); triples+ extend the
+same mechanism. Open-shell / higher-spin and native unitary-group (`E_pq`)
+operators remain out of scope.
 
 ```python
 from fapy import Problem, operator_library as op

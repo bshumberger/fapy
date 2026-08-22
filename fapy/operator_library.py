@@ -40,7 +40,7 @@ _KAPPA_SYM = (((1, 0), -1),)
 # --- the general operator primitive ------------------------------------------
 
 def O_N(name, creators, annihilators, tensor_indices=None, symmetry=(), hermitian=(),
-        prefactor=None, normal_ordered=True, free=()):
+        spin_rule="", prefactor=None, normal_ordered=True, free=()):
     """A general operator: a factor times a string of creators and annihilators.
 
     Parameters
@@ -67,6 +67,11 @@ def O_N(name, creators, annihilators, tensor_indices=None, symmetry=(), hermitia
         Hermiticity (real-orbital-only) symmetry generators stamped on the factor,
         applied only in a "real" run. Set it for a Fock/ERI-type tensor so its
         Hermiticity travels with the operator instead of being looked up by name.
+    spin_rule : str, optional
+        Structural spin-coupling type ("fock"/"eri"/"amplitude"), read only by the
+        closed-shell spin-adaptation pass to tell constraint-imposing Hamiltonian
+        integrals from constraint-free amplitudes. Travels on the tensor, not the
+        name; it is not a spin label.
     prefactor : int or Fraction, optional
         The scalar prefactor. Defaults to 1/(n_c! n_a!), which is 1 for a one-body
         operator and 1/4 for a two-body one -- the normalization that accompanies a
@@ -108,7 +113,7 @@ def O_N(name, creators, annihilators, tensor_indices=None, symmetry=(), hermitia
     if name is not None:
         if tensor_indices is None:
             tensor_indices = tuple(label for label, _ in creators + annihilators)
-        integral = Integral(name, tuple(tensor_indices), symmetry, hermitian)
+        integral = Integral(name, tuple(tensor_indices), symmetry, hermitian, spin_rule)
 
     return Expression.single(
         block(ops, integral, normal_ordered=normal_ordered), Fraction(prefactor), free=free
@@ -121,7 +126,7 @@ def O_N(name, creators, annihilators, tensor_indices=None, symmetry=(), hermitia
 F_N = Expression.single(
     block(
         [cre("p", "gen"), ann("q", "gen")],
-        Integral("f", ("p", "q"), hermitian=_FOCK_HERMITIAN),
+        Integral("f", ("p", "q"), hermitian=_FOCK_HERMITIAN, spin_rule="fock"),
     ),
     Fraction(1),
 )
@@ -130,7 +135,8 @@ F_N = Expression.single(
 V_N = Expression.single(
     block(
         [cre("p", "gen"), cre("q", "gen"), ann("s", "gen"), ann("r", "gen")],
-        Integral("g", ("p", "q", "r", "s"), _INTEGRAL_SYM, hermitian=_INTEGRAL_HERMITIAN),
+        Integral("g", ("p", "q", "r", "s"), _INTEGRAL_SYM,
+                 hermitian=_INTEGRAL_HERMITIAN, spin_rule="eri"),
     ),
     Fraction(1, 4),
 )
@@ -169,7 +175,8 @@ def singles(name, i, a):
     symmetry, so no annotation is attached.
     """
     return Expression.single(
-        block([cre(a, "virt"), ann(i, "occ")], Integral(name, (i, a))),
+        block([cre(a, "virt"), ann(i, "occ")],
+              Integral(name, (i, a), spin_rule="amplitude")),
         Fraction(1),
     )
 
@@ -200,7 +207,7 @@ def doubles(name, i, j, a, b):
     return Expression.single(
         block(
             [cre(a, "virt"), cre(b, "virt"), ann(j, "occ"), ann(i, "occ")],
-            Integral(name, (i, j, a, b), _DOUBLES_SYM),
+            Integral(name, (i, j, a, b), _DOUBLES_SYM, spin_rule="amplitude"),
         ),
         Fraction(1, 4),
     )
@@ -235,7 +242,8 @@ def singles_dagger(name, i, a):
     mirroring ``singles``.
     """
     return Expression.single(
-        block([cre(i, "occ"), ann(a, "virt")], Integral(name, (i, a))),
+        block([cre(i, "occ"), ann(a, "virt")],
+              Integral(name, (i, a), spin_rule="amplitude")),
         Fraction(1),
     )
 
@@ -264,7 +272,7 @@ def doubles_dagger(name, i, j, a, b):
     return Expression.single(
         block(
             [cre(i, "occ"), cre(j, "occ"), ann(b, "virt"), ann(a, "virt")],
-            Integral(name, (i, j, a, b), _DOUBLES_SYM),
+            Integral(name, (i, j, a, b), _DOUBLES_SYM, spin_rule="amplitude"),
         ),
         Fraction(1, 4),
     )

@@ -126,20 +126,29 @@ class Integral:
         applied only in a real-orbital run (e.g. f_pq = f_qp, <pq||rs> = <rs||pq>).
         Like ``symmetry`` it travels with the object rather than being looked up by
         name, so a freely-named Fock/ERI-type tensor is collected correctly.
+    spin_rule : str
+        Structural spin-coupling type, one of "fock", "eri", "amplitude" (or "" if
+        unset). Read only by the closed-shell spin-adaptation post-processing pass,
+        which needs to tell a Hamiltonian integral (imposes a spin selection rule)
+        from an amplitude (imposes none). Like the symmetries it travels on the
+        object rather than being inferred from the name; it is NOT a spin label (no
+        spin quantum number is stored on the tensor).
 
     Notes
     -----
     Frozen and hashable, so it can key a dictionary when terms are collected.
-    ``symmetry``/``hermitian`` travel with the object rather than being looked up by
-    name, which lets an amplitude be named anything and still be collected correctly;
-    they carry no identifying weight (two with the same name and indices are equal
-    regardless of them) and so are excluded from equality and hashing. The symmetries
-    are only recorded here -- they are applied later, during canonicalization.
+    ``symmetry``/``hermitian``/``spin_rule`` travel with the object rather than being
+    looked up by name, which lets an amplitude be named anything and still be
+    classified/collected correctly; they carry no identifying weight (two with the
+    same name and indices are equal regardless of them) and so are excluded from
+    equality and hashing. The symmetries are only recorded here -- they are applied
+    later, during canonicalization.
     """
     name: str
     indices: Tuple[str, ...]
     symmetry: Tuple = field(default=(), compare=False)
     hermitian: Tuple = field(default=(), compare=False)
+    spin_rule: str = field(default="", compare=False)
 
     def relabel_indices(self, rep):
         """Return a copy with each index relabelled through ``rep``.
@@ -153,13 +162,14 @@ class Integral:
         Returns
         -------
         Integral
-            A copy with indices relabelled and both symmetries preserved.
+            A copy with indices relabelled and every annotation preserved.
         """
         return Integral(
             self.name,
             tuple(rep.get(i, i) for i in self.indices),
             self.symmetry,
             self.hermitian,
+            self.spin_rule,
         )
 
     def __repr__(self):

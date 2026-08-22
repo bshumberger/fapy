@@ -145,7 +145,7 @@ def canonical_tensor(tensor, symmetry="complex"):
     tuple
         ``(Integral, sign)`` -- the reduced tensor in its smallest arrangement and
         the sign picked up getting there. The reduced tensor keeps the original's
-        symmetry annotation.
+        annotations (symmetry, hermitian, spin_rule).
 
     Notes
     -----
@@ -159,7 +159,8 @@ def canonical_tensor(tensor, symmetry="complex"):
         if best_idx is None or idx < best_idx:
             best_idx = idx
             best_sign = sign
-    return Integral(tensor.name, best_idx, tensor.symmetry), best_sign
+    return Integral(tensor.name, best_idx, tensor.symmetry,
+                    tensor.hermitian, tensor.spin_rule), best_sign
 
 
 # --- canonical form of a whole term -------------------------------------------
@@ -248,9 +249,10 @@ def canonicalize_term(term, external_set, external_spaces, symmetry="complex"):
     Returns
     -------
     tuple
-        ``(key, sign, spaces)`` -- the canonical key (a sorted tuple of
-        ``(name, indices)``), the overall sign, and the resolved space of each
-        canonical index.
+        ``(key, sign, spaces, integrals)`` -- the canonical key (a sorted tuple of
+        ``(name, indices)``), the overall sign, the resolved space of each canonical
+        index, and the reduced ``Integral`` objects (which keep their annotations, so
+        the collected output can be canonicalized or spin-adapted again).
 
     Notes
     -----
@@ -282,12 +284,13 @@ def canonicalize_term(term, external_set, external_spaces, symmetry="complex"):
                 renamed = tensor.relabel_indices(rename)
                 reduced, s = canonical_tensor(renamed, symmetry)
                 sign *= s
-                canon.append((reduced.name, reduced.indices))
-            canon.sort()
-            key = tuple(canon)
+                canon.append(reduced)
+            canon.sort(key=lambda t: (t.name, t.indices))
+            key = tuple((t.name, t.indices) for t in canon)
             if best_key is None or key < best_key:
                 best_key = key
                 best_sign = sign
+                best_integrals = canon
 
     # Rebuild the resolved spaces for the canonical labels: an external keeps its
     # known space (checked FIRST, so an external spelled with a leading O/V is not
@@ -302,7 +305,7 @@ def canonicalize_term(term, external_set, external_spaces, symmetry="complex"):
                 spaces[label] = "occ"
             elif label.startswith("V"):
                 spaces[label] = "virt"
-    return best_key, best_sign, spaces
+    return best_key, best_sign, spaces, best_integrals
 
 
 # --- the collector ------------------------------------------------------------
@@ -348,12 +351,14 @@ def canonicalize(terms, externals=(), symmetry="complex"):
 
     totals = {}
     spaces_by_key = {}
+    integrals_by_key = {}
     for term in terms:
-        key, sign, spaces = canonicalize_term(
+        key, sign, spaces, integrals = canonicalize_term(
             term, external_set, external_spaces, symmetry
         )
         totals[key] = totals.get(key, Fraction(0)) + term.coefficient * sign
         spaces_by_key[key] = spaces
+        integrals_by_key[key] = integrals
 
     collected = []
     for key in sorted(totals):
@@ -361,8 +366,9 @@ def canonicalize(terms, externals=(), symmetry="complex"):
         if coeff == 0:
             # The contributions cancelled exactly; this term is not present.
             continue
-        integrals = [Integral(name, indices) for (name, indices) in key]
-        collected.append(CanonicalTerm(coeff, integrals, spaces_by_key[key]))
+        # Use the reduced Integral objects (annotations intact), not bare (name,
+        # indices), so the collected term stays fully typed for a second pass.
+        collected.append(CanonicalTerm(coeff, integrals_by_key[key], spaces_by_key[key]))
     return collected
 
 

@@ -319,11 +319,23 @@ features to build now.
    → `Term.integrals` must be a **list**, never fixed `amplitude`/`integral`
    slots. *(Satisfied: `Term.integrals`/`CanonicalTerm.integrals` are lists.)*
 
-### Spin adaptation — CLOSED-SHELL ONLY, as a post-processing map (planned)
+### Spin adaptation — CLOSED-SHELL ONLY, a post-processing map (BUILT for CISD)
 **Spin adaptation is scoped to the closed-shell (RHF singlet) case for now.** Open-shell
 and higher-spin are explicitly out of scope; do not build toward them. The kernel and all
 worked methods remain **spin-orbital** — spin adaptation does *not* touch the kernel,
 operators, contraction, resolve, or the existing `canonicalize`.
+
+**Status: built and validated for CISD** (`fapy/spin_adapt.py`, `test_019_spin_adapt.py`).
+`spin_adapt(canonical_terms, targets={...}, symmetry="real")` runs the five-step pass below
+over `.derive()` output. Validated end to end against the notes: the energy (eq 9,
+`2 f_ia c_i^a + Σ[2⟨ij|ab⟩−⟨ij|ba⟩]c_ij^ab`), the singles residual (eq 10, terms 1–5
+hand-verified incl. the 2J−K CIS coupling), and the doubles residual (driver → the Coulomb
+`⟨ab|ij⟩`, with the emergent `(i,a)↔(j,b)` / `a↔b` permutational symmetry of the mixed
+representative). The amplitude reduction is **derived** (antisymmetry + singlet relation),
+wired for rank ≤ 2; `reduce_amplitude` raises `NotImplementedError` at rank ≥ 3, which
+extends the same mechanism. One supporting fix: `canonicalize` now preserves tensor
+annotations on its output (returns the reduced `Integral`s, not bare `(name, indices)`), so
+the second (spin-adapt) pass sees typed tensors — canonicalization is now idempotent.
 
 **Chosen route: a purely post-processing pass over `.derive()` output** (spin summation /
 spin integration of the finished spin-orbital equations), *not* native unitary-group `E_pq`
