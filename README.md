@@ -29,6 +29,12 @@ the MP2/CISD/CCSD energies and the MP2 amplitude numerator.
 `fapy` is a **general derivation engine, not a set of methods**. You state a
 problem in a short Python input file and it returns the collected equation.
 
+The core is **spin-orbital throughout**. **Spin adaptation is scoped to the
+closed-shell (RHF singlet) case only** and is planned as a **post-processing map
+over `.derive()` output** (spin summation of the finished spin-orbital
+equations) — it will not touch the kernel. Open-shell / higher-spin and native
+unitary-group (`E_pq`) operators are out of scope for now. Not yet built.
+
 ```python
 from fapy import Problem, operator_library as op
 

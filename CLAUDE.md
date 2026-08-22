@@ -319,18 +319,77 @@ features to build now.
    → `Term.integrals` must be a **list**, never fixed `amplitude`/`integral`
    slots. *(Satisfied: `Term.integrals`/`CanonicalTerm.integrals` are lists.)*
 
-### Spin adaptation — a planned future direction (not near-term)
-**Spin adaptation** is now a **future implementation goal**, not permanently out of
-scope. Hald works closed-shell spin-adapted (`E_pq`,
-`L_pqrs = 2g_pqrs - g_psrq`); `main.pdf` is spin-orbital. These are different
-formalisms. **For now build spin-orbital only** — the current engine, tests, and
-worked methods are all spin-orbital, and mixing the two mid-build is where the design
-would collapse. The intent is to add spin adaptation *as a layer on top* of the
-finished spin-orbital core once it is solid: the free/bound index model and per-index
-spaces are deliberately general enough that spin-summed operators (`E_pq`, `L_pqrs`)
-could be introduced as new operator-library constructors + a spin-space, without
-touching the kernel. Sequencing: complete/validate spin-orbital first, then add spin
-adaptation; do not attempt both at once.
+### Spin adaptation — CLOSED-SHELL ONLY, as a post-processing map (planned)
+**Spin adaptation is scoped to the closed-shell (RHF singlet) case for now.** Open-shell
+and higher-spin are explicitly out of scope; do not build toward them. The kernel and all
+worked methods remain **spin-orbital** — spin adaptation does *not* touch the kernel,
+operators, contraction, resolve, or the existing `canonicalize`.
+
+**Chosen route: a purely post-processing pass over `.derive()` output** (spin summation /
+spin integration of the finished spin-orbital equations), *not* native unitary-group `E_pq`
+operators. The route was chosen because it reuses the entire validated spin-orbital core
+untouched and rides directly on the free/bound index model (externals = fixed spin, summed
+indices = summed over spin). The other route considered — native `E_pq`/`L_pqrs` operators
+with a new spin-free contraction algebra — was rejected for now as a second engine that
+would risk the "mix two formalisms mid-build" collapse.
+
+Data-model decisions (locked in):
+- **Spin is transient** — it lives only *inside* the `spin_adapt` pass (per-index spin labels
+  attached during the pass), never in the index model, `Operator`, `Integral`, or `Problem`.
+  Everything outside the pass stays spin-orbital, so the kernel and input interface are
+  untouched — the whole point of the post-processing route.
+- **Target spins are a dict** mapping each external index label to its spin, e.g.
+  `spin_adapt(terms, targets={"i": "a", "j": "b", "a": "a", "b": "b"})` for the mixed
+  representative `c_{iα jβ}^{aα bβ}`. Energy (no externals) needs no `targets`.
+
+Target algorithm (a `spin_adapt(canonical_terms, targets={...})` pass), per term:
+1. **Split every antisymmetrized `⟨pq‖rs⟩` into chemist Coulomb − exchange first.** The two
+   halves carry *different* spin selection rules (direct: σ_p=σ_r, σ_q=σ_s; exchange:
+   σ_p=σ_s, σ_q=σ_r), so an antisymmetrized integral has no single spin rule — split before
+   any spin analysis. Fock is one spin line (σ_p=σ_q).
+2. **Apply the user-specified external (target) spins.** The user names the target component
+   with spins, e.g. the doubles coefficient as the mixed representative
+   `c_{iα jβ}^{aα bβ}`; the energy has no externals so nothing is specified.
+3. **Build the spin-constraint graph and enumerate the `2^(#components)` consistent spin
+   labelings** — the spin analog of the Wick kernel's prune-during-generation; do NOT
+   generate `2^(#internal)` and filter.
+4. **Map survivors to spatial tensors**, reducing each amplitude spin-case to a minimal set
+   of independent representatives. **Derive this reduction, do NOT tabulate it.** The
+   closed-shell relations (notes eqs 7–8: `c_{iαjα}^{aαbα} = c_{iαjβ}^{aαbβ} −
+   c_{iαjβ}^{bαaβ}`, `c_{iαjβ}^{aαbβ} = −c_{iαjβ}^{bβaα}`) are *not* fundamental inputs —
+   they are derivable from (a) the spin-orbital amplitude's antisymmetry (already a declared
+   tensor symmetry) plus (b) the closed-shell singlet block relation (a same-spin block =
+   the antisymmetric combination of opposite-spin blocks). Implement the reduction as a
+   *canonicalization* — sort the spin-labeled indices by antisymmetry (tracking sign) to a
+   canonical spin ordering, then apply the singlet block relation recursively — so eqs 7–8
+   emerge as the **doubles instance** and the analogous triples/higher relations fall out of
+   the same procedure with **no per-rank code**.
+
+   **Rank scaling (why derive-don't-tabulate matters):** the integral selection rules (step
+   1) and the labeling enumeration (step 3) are rank-agnostic — the Hamiltonian is always
+   ≤2-body, so triples/quadruples add no new integral cases, and correct equations at any
+   rank follow from the generic machinery with no new work. The *only* rank-specific piece
+   is this amplitude reduction, and it grows for a real physical reason: the number of
+   independent spin couplings of an n-fold excitation increases (doubles collapse to one
+   representative; triples carry a second independent component; higher, more). A literal
+   per-rank lookup table (eqs 7–8 hardwired) is therefore a dead end — the "collection of
+   methods" trap. Keep eqs 7–8 as the **hand-checkable test oracle** for the doubles case,
+   but the implementation must derive.
+5. **Hand off to a spatial canonicalizer** with its *own* symmetry tables — the spatial ERI
+   is 8-fold (real), and the **spatial amplitude has only particle-exchange symmetry
+   `c_ij^ab = c_ji^ba`, NOT the antisymmetry of the spin-orbital amplitude** (get this
+   right). The factor-of-2 for unconstrained internal spin loops and the `2J−K` (`L_pqrs`)
+   collection fall out of this collection step — not a global α↔β "combine/cancel" merge
+   (that merge is valid only for fully-internal terms like the energy; keep it, if at all,
+   as an optional speed-up scoped to those).
+
+Design guardrails: **spin rules travel as explicit annotations on the tensor** (Fock /
+two-electron / amplitude), never name-sniffed — the same anti-name-sniffing principle as
+`Integral.hermitian`. This resolves the "integral vs amplitude conflation" worry: Hamiltonian
+factors *impose* spin selection rules; an amplitude's spin pattern is *determined* by
+externals + contraction (its only intrinsic rule is M_s conservation). Grounded in the
+author's "CISD Spin Adaptation" notes (eqs 1–10) and Crawford & Schaefer's spin-orbital-first
+review. Native `E_pq` remains a possible *later* direction if open-shell/GUGA is ever wanted.
 
 Analytic gradients, triples, and multipliers are far past CC energy and
 amplitudes. Not a near-term target.
