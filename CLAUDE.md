@@ -184,6 +184,30 @@ Audit results (each examined; resolution noted):
   folded sign. Now Hermiticity travels on the tensor: `Integral.hermitian` (set by
   `F_N`/`V_N`/`O_N`), read in `_tensor_generators`; the name tables are a fallback only
   for a *bare* hand-built tensor (no annotation). Regression `test_018_hardening`.
+- **[FIXED] An external index's space was pooled across terms.** `canonicalize` built
+  ONE `external_spaces` dict by looping over every term (last write wins) and stamped it
+  on all of them. The latent assumption: *a label has one orbital space for the whole
+  equation*. True for a projection manifold (`bra_doubles` pins `i,j` occ and `a,b` virt
+  permanently), **false for a general-index density target** — `{a_p^ a_q}` is an oo block
+  in one term and a vv block in another. So every collected term of a density reported the
+  same block, whichever term came last. Fixed by reading each term's own `index_spaces`.
+  Two guards added: an external reaching canonicalization with no resolved space now raises
+  (it used to be silently omitted from the output dict), and terms collected under one
+  canonical key must agree on their externals' spaces (same key ⇒ same slots ⇒ same
+  spaces, so a mismatch means two orbital blocks are about to be summed).
+  **This had a correctness path, not just a cosmetic one.** `spin_adapt` runs `canonicalize`
+  a *second* time with a fresh external set (`targets`), so a label demoted from external to
+  summed there is bucketed occ/virt from its recorded space — a pooled space put a virtual
+  dummy into an occupied amplitude slot (`λ(O0,V2,V0,V1)`), emitted with no error. Spin
+  adaptation is the only place that re-canonicalizes already-collected terms *and*
+  re-declares externals, which is what turns a metadata defect into a wrong equation.
+  **Root cause, still open:** an index's space is stored twice — structurally (which slot of
+  which tensor it occupies) and as data (`Term.index_spaces`) — with no invariant tying them
+  together. `Integral` carries no per-slot space (the `Operator.space` values are dropped
+  when `contract_blocks` builds a `Term`), and `Integral.relabel_indices` substitutes labels
+  purely textually, so a drifted dict gets *written into* the tensors unchallenged. The
+  structural fix is to put per-slot spaces on `Integral` and make the dict derived rather
+  than authoritative. Regression: `test_021_external_spaces.py`.
 - **[GUARDED] A summed index that reaches canonicalization without an `occ`/`virt` space**
   was silently left un-renamed (behaving like an external, blocking collection).
   `_dummy_labels` now raises instead (`canonicalize.py`).

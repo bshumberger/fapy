@@ -242,7 +242,9 @@ def canonicalize_term(term, external_set, external_spaces, symmetry="complex"):
     external_set : set
         External labels, held fixed (never renamed).
     external_spaces : dict
-        The known space of each external label.
+        The resolved space of each external label **in this term**. Externals are
+        not pooled across terms: a general-index target carries a different space
+        in different terms.
     symmetry : {"real", "complex"}, optional
         The run mode used to reduce each tensor.
 
@@ -299,7 +301,17 @@ def canonicalize_term(term, external_set, external_spaces, symmetry="complex"):
     spaces = {}
     for _name, indices in best_key:
         for label in indices:
-            if label in external_spaces:
+            if label in external_set:
+                # Checked before the O#/V# spelling so an external spelled with a
+                # leading O/V keeps its declared space. A missing entry would have
+                # left the label absent from the output dict, so raise instead --
+                # the same "never silently unspaced" rule as _dummy_labels.
+                if label not in external_spaces:
+                    raise ValueError(
+                        f"external index {label!r} reached canonicalization with no "
+                        "resolved orbital space; every index of a surviving term must "
+                        "resolve to 'occ' or 'virt'."
+                    )
                 spaces[label] = external_spaces[label]
             elif label.startswith("O"):
                 spaces[label] = "occ"
@@ -342,21 +354,33 @@ def canonicalize(terms, externals=(), symmetry="complex"):
     """
     external_set = set(externals)
 
-    # Learn the space of each external index from the terms themselves.
-    external_spaces = {}
-    for term in terms:
-        for label, space in term.index_spaces.items():
-            if label in external_set:
-                external_spaces[label] = space
-
     totals = {}
     spaces_by_key = {}
     integrals_by_key = {}
     for term in terms:
+        # An external's space is read from THIS term, never pooled across the
+        # equation. A general-index target (a density's {a_p^ a_q}) is occupied in
+        # one term and virtual in another, so one space per label is not a property
+        # the equation has; pooling them silently stamped every collected term with
+        # whichever term happened to come last.
+        term_external_spaces = {
+            label: space
+            for label, space in term.index_spaces.items()
+            if label in external_set
+        }
         key, sign, spaces, integrals = canonicalize_term(
-            term, external_set, external_spaces, symmetry
+            term, external_set, term_external_spaces, symmetry
         )
         totals[key] = totals.get(key, Fraction(0)) + term.coefficient * sign
+        # Terms sharing a canonical key have the same tensor structure, so their
+        # externals sit in the same slots and must agree on space. A disagreement
+        # means two physically distinct blocks are about to be summed into one.
+        if key in spaces_by_key and spaces_by_key[key] != spaces:
+            raise ValueError(
+                f"terms collected under the same canonical key {key!r} disagree on "
+                f"their index spaces ({spaces_by_key[key]} vs {spaces}): they belong "
+                "to different orbital blocks and must not be summed together."
+            )
         spaces_by_key[key] = spaces
         integrals_by_key[key] = integrals
 
