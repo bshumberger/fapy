@@ -199,13 +199,23 @@ class OperatorBlock:
         operators from different blocks always may contract. ``contract_blocks``
         reads this flag off each block to build the contraction rule, so a
         non-normal-ordered operator and a normal-ordered one can sit in one product.
+    connected_group : int, optional
+        Identifier of the connectedness group the block belongs to, or None (the
+        default) if it belongs to none. Blocks sharing an id are required to be
+        mutually connected: every surviving contraction must link them into a single
+        component, discarding the disconnected ones. This is how the connected-cluster
+        theorem is stated -- it is ``H_bar = (H e^T)_C`` that is connected, so the
+        requirement travels on the operator blocks rather than being a global switch.
+        A projection manifold, and any block outside the connected operator, leaves it
+        None and is excluded from the graph (it may still contract freely).
     """
     ops: Tuple[Operator, ...]
     integral: Optional[Integral] = None
     normal_ordered: bool = True
+    connected_group: Optional[int] = None
 
 
-def block(ops, integral=None, normal_ordered=True):
+def block(ops, integral=None, normal_ordered=True, connected_group=None):
     """Build an ``OperatorBlock`` from a list of operators.
 
     Parameters
@@ -217,9 +227,12 @@ def block(ops, integral=None, normal_ordered=True):
     normal_ordered : bool, optional
         Whether the block is normal-ordered (default True). Pass False for a block
         whose own operators may self-contract (a non-normal-ordered operator).
+    connected_group : int, optional
+        Connectedness group the block joins, or None (default) for none. Normally
+        stamped by ``operator_library.connected`` rather than passed by hand.
 
     Returns
     -------
     OperatorBlock
     """
-    return OperatorBlock(tuple(ops), integral, normal_ordered)
+    return OperatorBlock(tuple(ops), integral, normal_ordered, connected_group)

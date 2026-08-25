@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, replace
 from fractions import Fraction
+from itertools import count
 from typing import Tuple
 
 from .operators import OperatorBlock
@@ -57,11 +58,13 @@ def _relabel_block(blk, rep):
 
     Rebuilds the frozen ``Operator``s (preserving dagger/space/group) and pushes the
     same ``rep`` through the tensor via ``Integral.relabel_indices``, so operator
-    labels and tensor indices stay in lockstep.
+    labels and tensor indices stay in lockstep. The block is rebuilt with
+    ``replace``, not a positional constructor call, so every other field it carries
+    (``normal_ordered``, ``connected_group``) survives a product untouched.
     """
     ops = tuple(replace(op, label=rep.get(op.label, op.label)) for op in blk.ops)
     integral = blk.integral.relabel_indices(rep) if blk.integral is not None else None
-    return OperatorBlock(ops, integral, blk.normal_ordered)
+    return replace(blk, ops=ops, integral=integral)
 
 
 def _relabel_terms(terms, rep):
@@ -322,6 +325,58 @@ class Expression:
                     )
                 )
         return out
+
+
+# --- connectedness --------------------------------------------------------------
+
+# Each call to ``connected`` mints a fresh id, so two independently connected
+# factors of one expression impose two independent requirements.
+_connected_ids = count()
+
+
+def connected(expr: Expression) -> Expression:
+    """Require the operator blocks of ``expr`` to be mutually connected.
+
+    Parameters
+    ----------
+    expr : Expression
+        The operator whose contractions are to be restricted.
+
+    Returns
+    -------
+    Expression
+        The same expression with every block of every term tagged with one fresh
+        connectedness id.
+
+    Notes
+    -----
+    This states the connected-cluster theorem where it belongs -- on the operator.
+    ``H_bar = exp(-T) H exp(T) = (H exp(T))_C`` is connected as an *operator*, so
+    ``connected(H_N * exp_T)`` marks it and every contraction that leaves a factor
+    detached from the rest is discarded during generation. Writing it this way,
+    rather than as a switch on the derivation, keeps the requirement local to the
+    operator it describes: a projection manifold is never tagged (it is the bracket,
+    not part of H_bar, and including it would wrongly admit terms whose cluster
+    operators reach the Hamiltonian only by way of the bra), and two separately
+    marked factors -- a connected H_bar beside an unconnected Lambda -- each keep
+    their own requirement.
+
+    Marking an expression lets the user hand the engine a plain ``H_N * exp(T)``
+    product in place of the Baker-Campbell-Hausdorff nested commutators: the
+    disconnected orderings the commutators exist to cancel are never generated.
+    Nothing is checked here about whether the theorem applies -- a linear-CI
+    residual genuinely keeps its disconnected ``E_corr c_mu`` piece -- so it is the
+    user's statement of the physics, not an optimization the engine may assume.
+    """
+    cid = next(_connected_ids)
+    terms = [
+        ExprTerm(
+            t.coefficient,
+            tuple(replace(b, connected_group=cid) for b in t.blocks),
+        )
+        for t in expr.terms
+    ]
+    return Expression(terms, free=expr.free)
 
 
 # --- commutators --------------------------------------------------------------

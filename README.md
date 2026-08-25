@@ -133,7 +133,8 @@ The full surface of the build-phase is:
   - `Operator` — `label`, `dagger`, `space`, `group`; constructors `cre` / `ann`;
     `Space` alias
   - `Integral` — `name`, `indices`, `symmetry`
-  - `OperatorBlock` — `ops` + `integral` + `normal_ordered`; constructor `block`
+  - `OperatorBlock` — `ops` + `integral` + `normal_ordered` + `connected_group`;
+    constructor `block`
 
 **Evaluation phase**
 
@@ -148,9 +149,11 @@ Problem.report()
 │   ├─ Expression.vev()                                       → Terms  (loops over ExprTerm)
 │   │   └─ contract_blocks(*blocks)          (wick.py)
 │   │       ├─ group_string(...)              (operators.py)  flatten blocks → tagged string
-│   │       │                                 (derive may_contract from each block's normal_ordered flag)
+│   │       │                                 (derive may_contract from each block's normal_ordered flag,
+│   │       │                                  and connected_groups from each block's connected_group)
 │   │       ├─ declared_spaces(...)           (resolve.py)    label → declared space
-│   │       ├─ wick_vev(ops, may_contract)    (wick.py)       → raw [{sign, deltas}]
+│   │       ├─ wick_vev(ops, may_contract,    (wick.py)       → raw [{sign, deltas}]
+│   │       │            connected_groups)                     (drop disconnected completed matchings)
 │   │       │   ├─ recursive_generator(...)   (contraction.py)  all (2n-1)!! matchings
 │   │       │   ├─ may_contract(a, b)                           eligible pair? (per-block rule)
 │   │       │   ├─ contraction(a, b)          (contraction.py)  nonzero delta?
@@ -193,7 +196,7 @@ The full surface of the evaluation phase is:
 - **`problem.py`**
   - `Problem` methods `external_indices`, `derive`, `report`
 - **`expression.py`**
-  - `Expression.vev`
+  - `Expression.vev`; `connected` — mark an operator's blocks mutually connected
 - **`wick.py`**
   - `wick_vev` — full-contraction driver; `contract_blocks` — factor-aware driver
   - `Term` — a signed product of factors in resolved indices

@@ -212,6 +212,64 @@ Audit results (each examined; resolution noted):
 
 ---
 
+## Connectedness (the connected-cluster theorem, as a block annotation)
+
+`H_bar = exp(-T) H exp(T) = (H exp(T))_C` is connected **as an operator**, so the
+requirement travels on the operator blocks, not as a switch on the derivation:
+
+- `OperatorBlock.connected_group: int | None` (default None). Blocks sharing an id must
+  be linked into a single component by every surviving contraction; a matching that
+  leaves one detached is discarded.
+- `connected(expr)` (in `expression.py`, exported from `fapy`) stamps one fresh id on
+  every block of every term. Two separate calls mint two ids, so a connected `H_bar`
+  beside an unconnected `Lambda` each keep their own requirement.
+- `contract_blocks` reads the ids off the blocks exactly as it reads `normal_ordered`,
+  and hands `wick_vev` a `connected_groups` mapping. **Nothing is threaded through
+  `Problem` or `Expression.vev`** — this is the "options live on the object they
+  describe" rule, and it is why the change touched three files instead of five.
+- In `wick_vev`: each **completed matching** is run through a small union-find over the
+  tagged groups (every id in one component). An untagged run does no connectedness work
+  at all. Connectedness cannot be a `may_contract` policy — that rule is pairwise/local,
+  this is global.
+- **Test at the leaves; do NOT prune during the descent.** This was measured, and the
+  measurement reversed the obvious design. An incremental rollback union-find maintained
+  on every committed pair cut only ~2% of the search (243,587 → 238,179 `contraction`
+  calls on the cubic T1+T2 singles residual) while adding bookkeeping to all ~240k pairs
+  — a net ~20% loss on tagged runs and a **16% regression on every untagged derivation**.
+  There are three orders of magnitude fewer completed matchings than pairs tried, so the
+  leaf test is both cheaper and far simpler. This is the one place in the engine where
+  the "prune during generation" instinct (right for `policy`/`contraction`, which are
+  pairwise and reject whole sub-trees) is wrong: connectedness is only decidable once a
+  matching is complete, so an incremental version pays everywhere and rejects almost
+  nothing early.
+- **The win is mostly expressive; the speedup is real but modest.** On the quartic T1+T2
+  doubles residual, BCH needs 682 expression terms against 62 for
+  `connected(H_N * exp_T)`, but wall clock is 69.1 s versus 55.5 s — 11x fewer terms buys
+  ~20%, not 11x. Total kernel work is roughly conserved: BCH slices the same operator
+  content into more, individually cheaper terms (orderings like `T H T` put cluster
+  operators left of `H_N`, where few contractions are legal, so those branches die at
+  once). Do not expect expression-term counts to predict runtime.
+
+**Which blocks are nodes is the subtle part, and it is load-bearing.** Only tagged
+blocks are nodes. A projection manifold must NOT be tagged: it is the bracket, not part
+of `H_bar`. Tagging it wrongly admits terms in which a cluster operator reaches the
+Hamiltonian *only by way of the bra* — the bra-included graph is one component while
+`(H exp(T))_C` does not contain the term. `test_020` pins this with
+`<Phi_ij^ab| F_N T1 T1' |0>`: nonzero unmarked, empty when marked on the operator, and
+**unchanged** if the bra is (wrongly) tagged too. An index-free `scalar()` block carries
+no operators, so it never appears in the graph and is never required to connect.
+
+**Opt-in, and the user's statement of physics.** The engine never assumes it: a linear
+CI residual genuinely keeps its disconnected `E_corr c_mu` piece, and a density with
+`Lambda` has a different connectedness structure than `(H exp(T))_C`.
+
+Validated in `test_020_connected.py`: the CCSD energy is unchanged by the annotation
+(connectedness is automatic there — cluster operators are pure quasi-particle creators,
+so no T-T contraction is nonzero); the T2 doubles residual and the T1+T2 singles
+residual agree **term for term** with the BCH nested-commutator route; and the full
+quartic T1+T2 doubles residual matches term for term at 63 terms (checked out of band,
+too slow for the suite at ~80 s per route).
+
 ## Free/bound index hygiene
 
 Every index is either **free** (external, un-summed) or **bound** (a dummy summation
@@ -554,9 +612,12 @@ keeps the general `f_ov` (Brillouin) terms that Eq. 27 drops at canonical HF;
   `wick_vev`.
 - Leftmost-unmatched pairing keeps every emitted pair ascending (`lo < hi`), so
   `ops[lo]` is always the left operator — which `contraction` and the sign depend on.
-- Remaining slowness at high order is the **commutator/BCH expansion** generating many
-  product terms (disconnected orderings that cancel at `canonicalize`), not the kernel.
-  The next optimization is connected-only generation (skip disconnected contractions).
+- **[DONE] Connected-only contractions.** The old note here was that the remaining
+  slowness at high order is the **commutator/BCH expansion** generating many product
+  terms (disconnected orderings that cancel at `canonicalize`), not the kernel. That is
+  now addressed: `connected(expr)` (in `expression.py`) marks an operator as connected,
+  so `<Phi_mu| connected(H_N * exp_T) |0>` replaces the BCH nested commutators and the
+  disconnected orderings are never generated. See "Connectedness" below.
 
 ## Style
 - Prefer explicit declarations over inference (spaces, symmetries, policies).

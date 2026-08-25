@@ -31,6 +31,7 @@ from .expression import (
     Expression,
     ExprTerm,
     commutator,
+    connected,
     left_nested_commutator,
     right_nested_commutator,
 )
@@ -71,6 +72,7 @@ __all__ = [
     "Expression",
     "ExprTerm",
     "commutator",
+    "connected",
     "left_nested_commutator",
     "right_nested_commutator",
     "Symmetry",

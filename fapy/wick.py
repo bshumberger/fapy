@@ -11,7 +11,7 @@ from .resolve import declared_spaces, resolve_term
 
 # --- driver -------------------------------------------------------------------
 
-def wick_vev(ops, policy=normal_ordered_blocks):
+def wick_vev(ops, policy=normal_ordered_blocks, connected_groups=None):
     """Full contraction (Fermi-vacuum VEV) of a flat operator string.
 
     Parameters
@@ -25,6 +25,13 @@ def wick_vev(ops, policy=normal_ordered_blocks):
         contracts two operators from the same group is discarded, so only
         inter-group contractions contribute. ``contract_all`` contracts everything
         (a single normal-ordering of one raw string).
+    connected_groups : dict, optional
+        Maps a block's group index to its connectedness id, for the blocks that
+        carry one (see ``OperatorBlock.connected_group``). Blocks sharing an id must
+        be linked into a single component by the contraction, so a matching that
+        leaves one of them detached is discarded. Blocks absent from the mapping --
+        a projection manifold, an index-free scalar -- are not nodes of the graph
+        and contract freely. Default None imposes no connectedness requirement.
 
     Returns
     -------
@@ -50,11 +57,53 @@ def wick_vev(ops, policy=normal_ordered_blocks):
     is proportional to the surviving contractions, not the full ``(2n-1)!!`` count.
     This is exact: the set of fully-surviving matchings, their deltas, and the sign
     (read off the completed pair list) are identical to enumerate-then-filter.
+
+    Connectedness, when requested, is enforced on the completed matching -- it is a
+    global property of the whole pairing, not a pairwise rule like ``policy``, so it
+    cannot be folded into the elementary gate. Each completed matching is run through
+    a small union-find over the tagged block groups; an untagged run does no
+    connectedness work at all. Testing at the leaves rather than pruning during the
+    descent is deliberate and was measured: an incremental (rollback) union-find
+    maintained on every committed pair cut only ~2% of the search while adding
+    bookkeeping to every one of ~240k pairs, a net ~20% loss. There are orders of
+    magnitude fewer completed matchings than pairs tried, so the leaf test is both
+    cheaper and simpler.
     """
     # A string with an odd number of operators has no full contraction.
     n = len(ops)
     if n % 2 == 1:
         return []
+
+    # Connectedness bookkeeping: only the tagged block groups that actually carry
+    # operators are nodes. A line into an untagged block joins nothing, because it is
+    # the operator (H_bar = (H e^T)_C) that is connected, not the matrix element it
+    # sits in, so the projection manifolds must be absent from the graph. A tagged
+    # block with no operators (an index-free scalar) never appears here and so is
+    # never required to connect.
+    tags = dict(connected_groups or {})
+    nodes = [g for g in dict.fromkeys(o.group for o in ops) if g in tags]
+
+    def is_connected():
+        """Whether the completed matching draws each connectedness id into one piece."""
+        parent = {g: g for g in nodes}
+
+        def find(g):
+            while parent[g] != g:
+                g = parent[g]
+            return g
+
+        # Only a contraction between two blocks of the SAME id is an edge.
+        for lo, hi in pairs:
+            g_lo, g_hi = ops[lo].group, ops[hi].group
+            if g_lo in tags and g_hi in tags and tags[g_lo] == tags[g_hi]:
+                r_lo, r_hi = find(g_lo), find(g_hi)
+                if r_lo != r_hi:
+                    parent[r_hi] = r_lo
+
+        roots = {}
+        for g in nodes:
+            roots.setdefault(tags[g], set()).add(find(g))
+        return all(len(r) == 1 for r in roots.values())
 
     terms = []
     matched = [False] * n
@@ -66,8 +115,10 @@ def wick_vev(ops, policy=normal_ordered_blocks):
         # so every pair is ascending (lo < hi).
         lo = next((i for i in range(n) if not matched[i]), None)
         if lo is None:
-            # A complete matching: record it, tagged with the permutation sign.
-            terms.append({"sign": fermion_sign(list(pairs)), "deltas": list(deltas)})
+            # A complete matching. Keep it only if every connectedness group has
+            # been drawn into a single component.
+            if not nodes or is_connected():
+                terms.append({"sign": fermion_sign(list(pairs)), "deltas": list(deltas)})
             return
 
         matched[lo] = True
@@ -157,6 +208,10 @@ def contract_blocks(*blocks, externals=()):
     gathered from the blocks, and the fermionic sign becomes the term's coefficient.
     A contraction that asks one index class to be both occupied and virtual is
     impossible and is dropped.
+
+    Any connectedness requirement is read off the blocks the same way: blocks
+    carrying the same ``connected_group`` must be linked into one component, so a
+    disconnected matching is discarded rather than generated and later cancelled.
     """
     # Flatten the blocks into one tagged operator string and collect the factors
     # in block order so the resulting term lists them left to right; record each
@@ -164,9 +219,12 @@ def contract_blocks(*blocks, externals=()):
     combined = []
     integrals = []
     normal_ordered = {}
+    connected_groups = {}
     for g_idx, blk in enumerate(blocks):
         combined.extend(group_string(list(blk.ops), g_idx))
         normal_ordered[g_idx] = blk.normal_ordered
+        if blk.connected_group is not None:
+            connected_groups[g_idx] = blk.connected_group
         if blk.integral is not None:
             integrals.append(blk.integral)
 
@@ -180,7 +238,7 @@ def contract_blocks(*blocks, externals=()):
 
     # Run the contraction and turn each surviving matching into a Term.
     terms = []
-    for raw in wick_vev(combined, policy=may_contract):
+    for raw in wick_vev(combined, policy=may_contract, connected_groups=connected_groups):
         resolved = resolve_term(raw, declared, externals)
         if resolved is None:
             continue
