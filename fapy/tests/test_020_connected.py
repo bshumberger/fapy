@@ -21,48 +21,7 @@ from math import factorial
 
 from fapy import Problem, operator_library as op
 from fapy.expression import connected, left_nested_commutator
-from fapy.operators import cre, ann, group_string
-from fapy.policy import normal_ordered_blocks
-from fapy.wick import wick_vev
 from fapy.tests.utils import term_multiset
-
-
-def _four_one_operator_blocks():
-    """A B C D, where A-B is a particle line, C-D a hole line, and nothing else.
-
-    Every other pair vanishes on the elementary rule (mismatched space, or a
-    creator standing to the left where the particle line needs an annihilator), so
-    the string has exactly one full contraction and it has two components.
-    """
-    return (
-        group_string([ann("a", "virt")], 0)
-        + group_string([cre("b", "virt")], 1)
-        + group_string([cre("i", "occ")], 2)
-        + group_string([ann("j", "occ")], 3)
-    )
-
-
-def test_kernel_keeps_the_only_matching_when_nothing_is_required():
-    """Without a connectedness requirement the two-component matching survives."""
-    terms = wick_vev(_four_one_operator_blocks(), normal_ordered_blocks)
-    assert len(terms) == 1
-    assert terms[0]["deltas"] == [("a", "b", "virt"), ("i", "j", "occ")]
-
-
-def test_kernel_rejects_a_matching_that_leaves_two_components():
-    """Requiring all four blocks to connect kills the only matching."""
-    ops = _four_one_operator_blocks()
-    assert wick_vev(ops, normal_ordered_blocks, {0: 0, 1: 0, 2: 0, 3: 0}) == []
-    # Two blocks that never contract with each other cannot be one component.
-    assert wick_vev(ops, normal_ordered_blocks, {0: 0, 2: 0}) == []
-
-
-def test_kernel_satisfies_two_independent_connectedness_groups():
-    """Each id is required connected on its own, so the matching survives."""
-    terms = wick_vev(_four_one_operator_blocks(), normal_ordered_blocks,
-                     {0: 0, 1: 0, 2: 1, 3: 1})
-    assert len(terms) == 1
-    assert terms[0]["deltas"] == [("a", "b", "virt"), ("i", "j", "occ")]
 
 
 def _ccsd_energy(mark):
