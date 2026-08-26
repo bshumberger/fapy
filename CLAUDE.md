@@ -217,6 +217,24 @@ Audit results (each examined; resolution noted):
 - **[HARDENED] External space read from spelling before the table.** `canonicalize`'s
   space rebuild now checks the externals table before the `O#/V#` spelling, so an external
   spelled with a leading uppercase `O`/`V` keeps its declared space.
+- **[OPEN — deferred] A malformed operator string is accepted silently.** Nothing validates
+  that a label names *one* index. `declared_spaces` catches only a label declared with two
+  different *spaces*; `block()` and `group_string()` validate nothing at all, so a degenerate
+  string like `f_pp {a_p^ a_p}` — one label on two distinct operator slots — is built and
+  contracted without complaint. It contracts to a class that must be occupied *and* virtual,
+  and resolution drops the term, so the current outcome is silent emptiness rather than a
+  wrong number. **The desired feature is rejection at construction** (`block`/`O_N`), where
+  the user can be told what is wrong, instead of a term quietly vanishing several layers
+  later. Deferred by the user, not dismissed.
+  Two things worth knowing before building it:
+  (a) it is unclear whether the space contradiction is reachable from *well-formed* input at
+  all — it needs one label at two positions with opposite dagger and a general space, which
+  is exactly the pathology; if it is unreachable, resolution's space check is defense in
+  depth and the real fix belongs entirely at construction;
+  (b) `test_006_contract_blocks.py::test_a_contraction_forced_into_two_spaces_is_dropped`
+  deliberately uses the degenerate string to reach that check, so adding the validation will
+  break that test **by design** — it then needs either a legitimate trigger (if one exists)
+  or retirement in favour of the construction-time test.
 - **[FIXED] Disjoint dummy labels** are no longer assumed for repeated operators.
   Indices are now free (external) or bound (summed); `Expression.__mul__` is
   capture-avoiding, alpha-renaming a colliding *bound* label of one factor to a fresh
