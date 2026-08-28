@@ -695,6 +695,25 @@ for a question that is genuinely open, not a parking space for an unchecked numb
   an explicit two-sided matrix element `⟨Φ_μ|H̄|Φ_ν⟩` with externals on both sides
   (an EOM Jacobian); the sigma-vector EOM form (`⟨Φ_μ|H̄R|0⟩`) and the Hessian avoid
   it, so it's orthogonal to the externals-through-resolution fix.
+- **`Term` and `CanonicalTerm` are structurally identical — DELIBERATELY left
+  separate.** Both are `(coefficient: Fraction, integrals: list, index_spaces: dict)`
+  with a byte-identical four-line `__repr__`, one in `wick.py` (layer 6, a raw
+  contraction) and one in `canonicalize.py` (layer 7, a collected equation term).
+  Nothing enforces the difference: it is a *stage* distinction, not a structural one
+  (a `Term`'s coefficient is one contraction's signed prefactor and its integrals are
+  in block order; a `CanonicalTerm`'s coefficient is summed over every term sharing a
+  key and its integrals are canonically sorted). `test_007`'s idempotence test in fact
+  rebuilds `Term`s out of `CanonicalTerm` fields and feeds them back through the
+  collector.
+  **Reviewed and left as is.** Deduplicating means either a shared base class or a
+  `_format_signed_product` helper, and `wick.py` currently imports nothing from
+  `canonicalize.py` — so it costs a cross-layer import or a third home (`operators.py`
+  is the natural one, both already depend on it for `Integral`). Eight duplicated lines
+  is the cheaper price than a new coupling between two layers kept deliberately apart.
+  The deeper question — whether these should be *one* class — is genuinely open: merging
+  is honest that they are the same object at two stages, keeping them separate puts the
+  stage in the type name, which is how the README's pipeline and the layered test suite
+  are organised. If it is ever done, prefer the small shared helper over a base class.
 - `exp(T)` / BCH truncation as a built-in; LaTeX output.
 
 ---
