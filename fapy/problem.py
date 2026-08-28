@@ -1,9 +1,9 @@
-"""Contains the Problem -- the <bra| expr |ket> derivation a fapy input file builds, and its derive/report interface."""
+"""Contains the Problem -- the <bra| expr |ket> derivation a fapy input file builds, and its derive interface."""
 
 from dataclasses import dataclass, field
 
 from .expression import Expression
-from .canonicalize import canonicalize, format_canonical
+from .canonicalize import canonicalize
 
 
 @dataclass
@@ -13,7 +13,7 @@ class Problem:
     Attributes
     ----------
     name : str
-        A label for the derivation, printed by ``report``.
+        A label for the derivation.
     expr : Expression
         The operator expression to sandwich.
     bra, ket : Expression
@@ -81,24 +81,3 @@ class Problem:
         externals = self.external_indices()
         raw = (self.bra * self.expr * self.ket).vev(externals=externals)
         return canonicalize(raw, externals=externals, symmetry=self.symmetry)
-
-    def report(self, stream=None):
-        """Derive the problem and print it as ``name: <collected equation>``.
-
-        Parameters
-        ----------
-        stream : file-like, optional
-            Where to print; defaults to standard output.
-
-        Returns
-        -------
-        list of CanonicalTerm
-            The collected terms, so a caller can both see and reuse the result.
-
-        Notes
-        -----
-        Output is plain text for now; a LaTeX rendering can be layered on later.
-        """
-        collected = self.derive()
-        print(f"{self.name}: {format_canonical(collected)}", file=stream)
-        return collected

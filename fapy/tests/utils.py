@@ -1,38 +1,26 @@
 """
 Shared helpers for the fapy test suite.
 
-The test files themselves contain only tests; any helper used by more than one of
-them (or any non-test function at all) lives here so the ``test_*`` modules read
-as a list of scenarios and their assertions.
+The test files themselves contain only tests; any non-test function lives here so
+the ``test_*`` modules read as a list of scenarios and their assertions.
+
+Each helper below has at least one caller. Three others were retired with the
+layered rewrite -- ``contract_groups``, ``resolve_groups``, and ``membership``
+were notebook-era conveniences that wrapped the driver and resolution, and the
+layers that own those stages now call them directly, which is the point of
+testing a layer at its own seam.
 """
 
 from collections import Counter
 
 from fapy.operators import group_string
-from fapy.wick import wick_vev
-from fapy.policy import normal_ordered_blocks
-from fapy.resolve import declared_spaces, resolve_terms
-
-
-def contract_groups(*groups):
-    """Contract several normal-ordered blocks and return the raw delta terms.
-
-    Stamps each block with its own group tag and runs the generalized-Wick driver.
-    This is the notebook-era convenience the golden-regression kernel tests are
-    written against; the package itself now goes through ``contract_blocks``.
-    """
-    combined = []
-    for g_idx, g in enumerate(groups):
-        combined.extend(group_string(g, g_idx))
-    return wick_vev(combined, policy=normal_ordered_blocks)
 
 
 def format_terms(terms):
     """Pretty-print raw driver terms as a signed string of Kronecker deltas.
 
     Each term is a leading sign followed by its deltas; an empty list prints as
-    "0". Used only by the golden-regression tests to compare against the exact
-    notebook output.
+    "0". Used by the driver layer to compare against hand-worked contractions.
     """
     if not terms:
         return "0"
@@ -42,21 +30,6 @@ def format_terms(terms):
         d = " ".join(f"d({la},{lb})" for (la, lb, _sp) in t["deltas"])
         parts.append(f"{s} {d}")
     return " ".join(parts).lstrip("+ ").strip()
-
-
-def resolve_groups(*groups):
-    """Contract a set of normal-ordered blocks and resolve the deltas.
-
-    Like ``contract_groups`` but with the resolution step, so the caller gets
-    resolved indices with spaces instead of a raw delta list. Used by the
-    resolution tests.
-    """
-    combined = []
-    for g_idx, g in enumerate(groups):
-        combined.extend(group_string(g, g_idx))
-    declared = declared_spaces(combined)
-    terms = wick_vev(combined, policy=normal_ordered_blocks)
-    return resolve_terms(terms, declared)
 
 
 def double_factorial(n):
@@ -75,24 +48,15 @@ def double_factorial(n):
 def flatten_blocks(*groups):
     """Combine several blocks into one tagged operator string.
 
-    This mirrors what ``contract_groups`` does internally: each block is stamped
-    with its own group index so a policy can later tell which operators shared a
-    normal-ordered block.
+    Each block is stamped with its own group index so a policy can later tell
+    which operators shared a normal-ordered block. This mirrors what
+    ``contract_blocks`` does internally, for tests that drive ``wick_vev``
+    directly rather than through the factor-aware layer above it.
     """
     combined = []
     for g_idx, g in enumerate(groups):
         combined.extend(group_string(g, g_idx))
     return combined
-
-
-def membership(resolved, label):
-    """Return the (representative, space) that a given label resolved into.
-
-    Every resolved term maps each original label to its class representative and
-    each representative to a space, so this looks up where ``label`` landed.
-    """
-    rep = resolved.rep[label]
-    return rep, resolved.spaces[rep]
 
 
 def term_summary(terms):

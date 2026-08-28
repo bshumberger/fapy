@@ -183,7 +183,7 @@ Audit results (each examined; resolution noted):
   named Fock/ERI was under-merged (duplicates) and a name collision over-merged with a
   folded sign. Now Hermiticity travels on the tensor: `Integral.hermitian` (set by
   `F_N`/`V_N`/`O_N`), read in `_tensor_generators`; the name tables are a fallback only
-  for a *bare* hand-built tensor (no annotation). Regression `test_018_hardening`.
+  for a *bare* hand-built tensor (no annotation). Regression `test_007_canonicalize.py`.
 - **[FIXED] An external index's space was pooled across terms.** `canonicalize` built
   ONE `external_spaces` dict by looping over every term (last write wins) and stamped it
   on all of them. The latent assumption: *a label has one orbital space for the whole
@@ -207,7 +207,7 @@ Audit results (each examined; resolution noted):
   when `contract_blocks` builds a `Term`), and `Integral.relabel_indices` substitutes labels
   purely textually, so a drifted dict gets *written into* the tensors unchallenged. The
   structural fix is to put per-slot spaces on `Integral` and make the dict derived rather
-  than authoritative. Regression: `test_021_external_spaces.py`.
+  than authoritative. Regression: `test_007_canonicalize.py`.
 - **[GUARDED] A summed index that reaches canonicalization without an `occ`/`virt` space**
   was silently left un-renamed (behaving like an external, blocking collection).
   `_dummy_labels` now raises instead (`canonicalize.py`).
@@ -217,6 +217,64 @@ Audit results (each examined; resolution noted):
 - **[HARDENED] External space read from spelling before the table.** `canonicalize`'s
   space rebuild now checks the externals table before the `O#/V#` spelling, so an external
   spelled with a leading uppercase `O`/`V` keeps its declared space.
+- **[FIXED] Canonicalization's sign was decided by iteration order for a term that
+  vanishes on its own symmetry.** `canonicalize_term` enumerates every assignment of
+  dummies to canonical slots and keeps the smallest key. Relabelling summed indices
+  never changes a term's value, so every assignment expresses the *same* quantity:
+  `T = s_σ · Σ g(K_σ)`. If two assignments reach the **same key with opposite signs**,
+  then `T = +X` and `T = −X` at once, so **T = 0**. The engine did not notice, and
+  emitted `±1` depending on which assignment the enumeration reached first — the two
+  tie on the key, so `key < best_key` never fires and the first one wins. A canonical
+  form decided by iteration order is not a canonical form.
+  The simplest instance is a lone antisymmetric amplitude summed over all its indices:
+  `Σ_ij t_ij^ab = 0`, and *either* antisymmetric pair alone is enough to kill it (fixing
+  only `i` still leaves `a`,`b` summed). `canonicalize_term` now returns `None` for such
+  a term — matching `resolve_term`'s established "this term vanishes" convention — and
+  `canonicalize` skips it. Note the two distinct ways a term leaves an equation: it may
+  vanish on its **own** symmetry (this check), or several distinct terms may land on one
+  key and **cancel against each other** (summed coefficient zero, dropped at the end).
+  **Not reachable from a real derivation** — zero ambiguous terms out of 227 raw terms
+  across the MP2 energy, MP2 doubles, CISD singles, CCSD T2 residual, and the
+  two-particle density; all four input scripts produce byte-identical output before and
+  after. It was reachable from hand-built terms, and four layer-7 tests were pinning the
+  artifact, which is how it was found. Regression: `test_007_canonicalize.py`
+  (`test_a_term_that_vanishes_on_its_own_symmetry_is_dropped` and the two beside it).
+- **[OPEN — found in the layer-7 test audit] An EMPTY symmetry annotation is
+  indistinguishable from NO annotation, so the name table still fires.**
+  `_tensor_generators` branches on `if tensor.symmetry or tensor.hermitian:` — both empty
+  tuples are falsy, so a tensor that carries no *definitional* symmetry falls through to
+  the name-keyed fallback no matter how it was built. A one-body operator has no
+  definitional symmetry by construction, so `O_N("f", [("p","gen")], [("q","gen")])`
+  produces `symmetry=() hermitian=()` and is silently handed the real-mode Fock
+  Hermiticity `f_pq = f_qp` **purely because of its name** — renaming it to `"myop"`
+  changes the collected equation. This is the exact name-sniffing that
+  `Integral.hermitian` was introduced to eliminate; the earlier fix closed the
+  *annotated* case and left the un-annotatable one open. Narrow (needs empty symmetry
+  AND empty hermitian AND a name in `_SYMMETRY_GENERATORS`/`_HERMITIAN_SYMMETRY`) but
+  reachable from `O_N`, which is the user-facing custom-operator primitive, and wrong in
+  the silent direction: a merge that should not happen, with a doubled coefficient.
+  **Fix:** a sentinel (e.g. `symmetry=None` meaning "not declared" vs `()` meaning
+  "declared to have none"), so the fallback fires only on genuine absence. Pinned as a
+  `strict=True` xfail:
+  `test_007_canonicalize.py::test_a_custom_operator_does_not_inherit_hermiticity_from_its_name`.
+- **[OPEN — deferred] A malformed operator string is accepted silently.** Nothing validates
+  that a label names *one* index. `declared_spaces` catches only a label declared with two
+  different *spaces*; `block()` and `group_string()` validate nothing at all, so a degenerate
+  string like `f_pp {a_p^ a_p}` — one label on two distinct operator slots — is built and
+  contracted without complaint. It contracts to a class that must be occupied *and* virtual,
+  and resolution drops the term, so the current outcome is silent emptiness rather than a
+  wrong number. **The desired feature is rejection at construction** (`block`/`O_N`), where
+  the user can be told what is wrong, instead of a term quietly vanishing several layers
+  later. Deferred by the user, not dismissed.
+  Two things worth knowing before building it:
+  (a) it is unclear whether the space contradiction is reachable from *well-formed* input at
+  all — it needs one label at two positions with opposite dagger and a general space, which
+  is exactly the pathology; if it is unreachable, resolution's space check is defense in
+  depth and the real fix belongs entirely at construction;
+  (b) `test_006_contract_blocks.py::test_a_contraction_forced_into_two_spaces_is_dropped`
+  deliberately uses the degenerate string to reach that check, so adding the validation will
+  break that test **by design** — it then needs either a legitimate trigger (if one exists)
+  or retirement in favour of the construction-time test.
 - **[FIXED] Disjoint dummy labels** are no longer assumed for repeated operators.
   Indices are now free (external) or bound (summed); `Expression.__mul__` is
   capture-avoiding, alpha-renaming a colliding *bound* label of one factor to a fresh
@@ -287,7 +345,7 @@ no operators, so it never appears in the graph and is never required to connect.
 CI residual genuinely keeps its disconnected `E_corr c_mu` piece, and a density with
 `Lambda` has a different connectedness structure than `(H exp(T))_C`.
 
-Validated in `test_020_connected.py`: the CCSD energy is unchanged by the annotation
+Validated in `test_008_expression.py`: the CCSD energy is unchanged by the annotation
 (connectedness is automatic there — cluster operators are pure quasi-particle creators,
 so no T-T contraction is nonzero); the T2 doubles residual and the T1+T2 singles
 residual agree **term for term** with the BCH nested-commutator route; and the full
@@ -320,7 +378,7 @@ MPn, UCC, commutators, `exp(T)`, densities), not anything CC/CI-specific.
   unifies bra/ket manifold externals with a density's interior target-operator externals
   under one rule. `one_body(p,q)`/`two_body(p,q,r,s)` build bare `{p†q}`/`{p†q†sr}`
   density targets (over `O_N(None, …)`) with their indices declared free.
-- Regression: `test_017_index_hygiene.py` (shared-`T` commutator ≡ hand-disjoint,
+- Regression: `test_008_expression.py` (shared-`T` commutator ≡ hand-disjoint,
   frees preserved / capture avoided, metadata preserved, externals inferred from an
   interior target).
 
@@ -407,7 +465,7 @@ and higher-spin are explicitly out of scope; do not build toward them. The kerne
 worked methods remain **spin-orbital** — spin adaptation does *not* touch the kernel,
 operators, contraction, resolve, or the existing `canonicalize`.
 
-**Status: built and validated for CISD** (`fapy/spin_adapt.py`, `test_019_spin_adapt.py`).
+**Status: built and validated for CISD** (`fapy/spin_adapt.py`, `test_016_spin_adapt.py`).
 `spin_adapt(canonical_terms, targets={...}, symmetry="real")` runs the five-step pass below
 over `.derive()` output. Validated end to end against the notes: the energy (eq 9,
 `2 f_ia c_i^a + Σ[2⟨ij|ab⟩−⟨ij|ba⟩]c_ij^ab`), the singles residual (eq 10, terms 1–5
@@ -503,7 +561,7 @@ Problem(
     bra  = op.reference(),            # <Phi_0|   (op.bra_doubles(...) for a projection)
     expr = op.V_N * op.doubles("t", "i", "j", "a", "b"),  # the operator expression — the "problem"
     ket  = op.reference(),            # |Phi_0>
-).report()
+).derive()
 ```
 
 - `expr` is built from the operator library and the expression algebra (`*`,
@@ -542,21 +600,42 @@ Problem(
 - **Library index labels are required, not defaulted.** `singles`/`doubles`/
   `singles_dagger`/`doubles_dagger`/`bra_*`/`ket_*`/`kappa` all take explicit index
   arguments (no defaults) so a repeated operator can't silently collide dummies.
-- `Problem.derive()` returns collected `CanonicalTerm`s; `.report()` prints them.
+- `Problem.derive()` returns collected `CanonicalTerm`s, each of which prints
+  itself; an input file loops over them. The package ships no formatting helper —
+  `report()` and `format_canonical()` were both removed as printing conveniences
+  with no caller.
 - The user does any **BCH / `exp(T)` expansion by hand** and hands the engine the
   resulting expression; `left_nested_commutator(H, T, T, ...)` transcribes
   `[[H,T],T]`-style terms. Worked problems are stated inline in the numbered
-  method tests (`test_007_MP2.py` … `test_012_orbital_rotation.py`).
+  method tests (`test_011_MP2.py` … `test_015_orbital_rotation.py`).
 - **Repeated operators need disjoint dummy labels** (auto-relabeling is a future
   item): give each excitation/de-excitation instance its own indices.
 
 ### Notes-grounded test cases
-`test_010_deexcitation.py` encodes the CID energy matrix elements
-(`CID_derivation/theory.tex`); `test_011_CISD_residual.py` the spin-orbital CISD
+`test_012_CID.py` encodes the CID equations (`CID_derivation/theory.tex`) in both
+the projected and Lagrangian forms; `test_013_CISD.py` the spin-orbital CISD
 singles/doubles residuals (Eqs. 25 & 27 from the handwritten notes) — the engine
 keeps the general `f_ov` (Brillouin) terms that Eq. 27 drops at canonical HF;
-`test_012_orbital_rotation.py` the orbital gradient `<0|[F_N, κ]|0>` (and
+`test_015_orbital_rotation.py` the orbital gradient `<0|[F_N, κ]|0>` (and
 `<0|[V_N, κ]|0>=0`).
+
+**The orbital-gradient factor is settled — it is `−1` per term, not `−1/2`.** This
+was carried for a while as a `strict` xfail ("factor-of-2 pending a hand-derivation
+against `main.pdf`") after the collision guard showed the engine giving twice the
+asserted value. The derivation was done and it confirms the **engine**, not the old
+assertion; the xfail is removed and the test now asserts `−1` (complex, two terms)
+and `−2` (real, one term). With `κ = ½ Σ_pq κ_pq E_pq^-` and `κ_pq` antisymmetric:
+
+- `<0|[H, a_a^ a_i]|0> = + f_ia` — only the `H a_a^ a_i` ordering survives, since
+  `<0| a_a^ = 0`;
+- `<0|[H, a_i^ a_a]|0> = − f_ai` — only the other ordering survives, since `a_a|0> = 0`;
+- so `<0|[H, E_ai^-]|0> = f_ia + f_ai`, and summing over all `p,q` while folding the
+  two halves with `κ_ai = −κ_ia` gives
+  `½[Σ κ_ai(f_ia+f_ai) − Σ κ_ia(f_ia+f_ai)] = −Σ κ_ia (f_ia + f_ai)`.
+
+The lesson is the one in the priority rule: the old `−1/2` was never re-derived after
+the labels were fixed, and an xfail preserved it instead of settling it. An xfail is
+for a question that is genuinely open, not a parking space for an unchecked number.
 
 ### Desirable future features (not built)
 - **Generic N-body operator `O_N` — primitive BUILT; presets refactor still open.**
@@ -616,6 +695,25 @@ keeps the general `f_ov` (Brillouin) terms that Eq. 27 drops at canonical HF;
   an explicit two-sided matrix element `⟨Φ_μ|H̄|Φ_ν⟩` with externals on both sides
   (an EOM Jacobian); the sigma-vector EOM form (`⟨Φ_μ|H̄R|0⟩`) and the Hessian avoid
   it, so it's orthogonal to the externals-through-resolution fix.
+- **`Term` and `CanonicalTerm` are structurally identical — DELIBERATELY left
+  separate.** Both are `(coefficient: Fraction, integrals: list, index_spaces: dict)`
+  with a byte-identical four-line `__repr__`, one in `wick.py` (layer 6, a raw
+  contraction) and one in `canonicalize.py` (layer 7, a collected equation term).
+  Nothing enforces the difference: it is a *stage* distinction, not a structural one
+  (a `Term`'s coefficient is one contraction's signed prefactor and its integrals are
+  in block order; a `CanonicalTerm`'s coefficient is summed over every term sharing a
+  key and its integrals are canonically sorted). `test_007`'s idempotence test in fact
+  rebuilds `Term`s out of `CanonicalTerm` fields and feeds them back through the
+  collector.
+  **Reviewed and left as is.** Deduplicating means either a shared base class or a
+  `_format_signed_product` helper, and `wick.py` currently imports nothing from
+  `canonicalize.py` — so it costs a cross-layer import or a third home (`operators.py`
+  is the natural one, both already depend on it for `Integral`). Eight duplicated lines
+  is the cheaper price than a new coupling between two layers kept deliberately apart.
+  The deeper question — whether these should be *one* class — is genuinely open: merging
+  is honest that they are the same object at two stages, keeping them separate puts the
+  stage in the type name, which is how the README's pipeline and the layered test suite
+  are organised. If it is ever done, prefer the small shared helper over a base class.
 - `exp(T)` / BCH truncation as a built-in; LaTeX output.
 
 ---
@@ -651,6 +749,55 @@ keeps the general `f_ov` (Brillouin) terms that Eq. 27 drops at canonical HF;
   (`main.pdf`/`theory.tex`, and the textbooks — e.g. Helgaker "Molecular
   Electronic Structure Theory", eq. numbers like 10.2.5).
 
+### Test suite layout (file order mirrors the README pipeline)
+
+**File number = position in the pipeline.** The suite reads bottom-up in one pass,
+from the base quantities to the interface a user actually touches. A new test lands
+in the file for the layer it exercises; a new *module* gets a new numbered file at
+its pipeline position.
+
+| file | layer / module |
+|---|---|
+| `test_001_operators.py` | base quantities — `operators.py` |
+| `test_002_contraction.py` | elementary hole/particle rule — `contraction.py` |
+| `test_003_policy.py` | `may_contract` eligibility — `policy.py` |
+| `test_004_wick_vev.py` | full-contraction driver — `wick.py` |
+| `test_005_resolve.py` | delta resolution — `resolve.py` |
+| `test_006_contract_blocks.py` | factor-aware driver — `wick.py` |
+| `test_007_canonicalize.py` | symmetry + collection — `canonicalize.py` |
+| `test_008_expression.py` | the algebra — `expression.py` |
+| `test_009_operator_library.py` | the operators — `operator_library.py` |
+| `test_010_problem.py` | input interface — `problem.py` |
+| `test_011_MP2.py` … `test_014_CCSD.py` | worked methods (MP2, CID, CISD, CCSD) |
+| `test_015_orbital_rotation.py` | orbital gradient — `<0|[F_N, κ]|0>` |
+| `test_016_spin_adapt.py` | closed-shell spin adaptation — `spin_adapt.py` |
+
+The standard every file meets, set by the method tests and carried down:
+
+1. **Module docstring names the layer and what it is responsible for** — one short
+   paragraph, not a history.
+2. **Test docstring states the rule or expression being evaluated**, not a
+   description of the result. Method layers use bra-ket form
+   (`E_corr = < Φ_0 | H_N (1 + T2) | Φ_0 >`); base layers cite the physics rule and
+   its `main.pdf` equation number.
+3. **Assertions pin the complete output.** No `assert len(...)` standing in for an
+   equation; `len` survives only where the count *is* the claim.
+4. **The expected value is derived, never read off the engine.** If an assertion
+   fails, work out the right answer — the test changes to the physically correct
+   value, not to whatever was emitted (the priority rule, applied to tests).
+5. **Non-obvious output is decoded** — density orbital blocks, spatial output.
+6. **Helpers live in `fapy/tests/utils.py`**, so `test_*` modules read as scenarios
+   and assertions only.
+
+**Mutation-test a layer before committing it.** Mutate the module it covers, run
+that file, restore. Every layer of the audit found at least one gap this way that
+review had missed, several of them tests that could not fail as written. Two
+recurring traps worth knowing: `Integral` declares `symmetry`/`hermitian`/
+`spin_rule` with `compare=False` and `free` lives on the `Expression` rather than
+its terms, so **equality assertions are blind to all four** and must be checked
+separately; and restore the mutated file from the script's own copy — a
+`git checkout <file>` will silently revert unstaged edits you meant to keep.
+
 ### Docstring / comment formatting (current preference — supersedes any older note)
 Model on the sibling **`apyib`** package. This replaces the earlier
 "verbose notebook-style narration" preference.
@@ -670,7 +817,7 @@ Model on the sibling **`apyib`** package. This replaces the earlier
 - **`README.md` has an end-to-end pipeline walkthrough** ("From input to output"):
   the **build phase** as nested *types* (`Problem ⊃ Expression ⊃ ExprTerm ⊃
   OperatorBlock ⊃ {Operator, Integral}`) and the **evaluation phase** as nested
-  *calls* (the `report → derive → vev/canonicalize → …` tree), each with a per-file
+  *calls* (the `derive → vev/canonicalize → …` tree), each with a per-file
   surface list. Read it to reorient on where things live.
 
 ### Naming

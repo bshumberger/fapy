@@ -250,11 +250,12 @@ def canonicalize_term(term, external_set, external_spaces, symmetry="complex"):
 
     Returns
     -------
-    tuple
+    tuple or None
         ``(key, sign, spaces, integrals)`` -- the canonical key (a sorted tuple of
         ``(name, indices)``), the overall sign, the resolved space of each canonical
         index, and the reduced ``Integral`` objects (which keep their annotations, so
-        the collected output can be canonicalized or spin-adapted again).
+        the collected output can be canonicalized or spin-adapted again). ``None``
+        when the term is identically zero by its own symmetry (see Notes).
 
     Notes
     -----
@@ -264,6 +265,20 @@ def canonicalize_term(term, external_set, external_spaces, symmetry="complex"):
     smallest symmetric arrangement and then sorted (the product is commutative),
     giving a candidate key and sign; the smallest key wins. Externals are never
     renamed, though tensor symmetry may still move them between slots.
+
+    A term can vanish on its own symmetry, and that is detected here. Relabelling
+    summed indices never changes a term's value, so every assignment expresses the
+    SAME quantity: ``T = s_sigma * sum g(K_sigma)`` for each assignment sigma. If two
+    assignments reach the same canonical key with opposite signs, then
+    ``T = +sum g(K)`` and ``T = -sum g(K)`` at once, so ``T = 0`` and the term is not
+    present in the equation. The simplest instance is a lone antisymmetric amplitude
+    summed over all of its indices -- ``sum_ij t_ij^ab`` is zero because t is
+    antisymmetric in i and j.
+
+    Without this check the term would be emitted with whichever sign the enumeration
+    happened to reach first, since the two assignments tie on the key. Detecting it
+    is therefore a correctness fix and not only a simplification: a tie broken by
+    iteration order is not a well-defined canonical form.
     """
     occ_dummies, virt_dummies = _dummy_labels(term, external_set)
     occ_slots = [f"O{k}" for k in range(len(occ_dummies))]
@@ -271,6 +286,7 @@ def canonicalize_term(term, external_set, external_spaces, symmetry="complex"):
 
     best_key = None
     best_sign = 1
+    signs_by_key = {}
     # Run over every assignment of dummies to canonical slots.
     for occ_perm in permutations(occ_dummies):
         occ_map = dict(zip(occ_perm, occ_slots))
@@ -289,6 +305,14 @@ def canonicalize_term(term, external_set, external_spaces, symmetry="complex"):
                 canon.append(reduced)
             canon.sort(key=lambda t: (t.name, t.indices))
             key = tuple((t.name, t.indices) for t in canon)
+
+            # Two relabellings of the summed indices that agree on the canonical
+            # key but disagree on the sign map the term onto minus itself, so it
+            # is identically zero. This holds whichever key ends up smallest, so
+            # the test is on every assignment rather than only the winner.
+            if signs_by_key.setdefault(key, sign) != sign:
+                return None
+
             if best_key is None or key < best_key:
                 best_key = key
                 best_sign = sign
@@ -351,6 +375,11 @@ def canonicalize(terms, externals=(), symmetry="complex"):
     Both are collapsed by brute force -- each term is reduced to a canonical key
     (see ``canonicalize_term``) and terms sharing a key have their coefficients
     summed; equivalence is deliberately NOT detected pair by pair.
+
+    Terms leave the equation two ways, and they are different. A term may vanish on
+    its OWN symmetry (``canonicalize_term`` returns None, and it is skipped here), or
+    several distinct terms may land on one key and cancel against each other (their
+    summed coefficient is zero, and the key is dropped at the end).
     """
     external_set = set(externals)
 
@@ -368,9 +397,14 @@ def canonicalize(terms, externals=(), symmetry="complex"):
             for label, space in term.index_spaces.items()
             if label in external_set
         }
-        key, sign, spaces, integrals = canonicalize_term(
+        canonical = canonicalize_term(
             term, external_set, term_external_spaces, symmetry
         )
+        # A term that vanishes on its own symmetry contributes nothing and is not
+        # allowed to claim a key (see ``canonicalize_term``).
+        if canonical is None:
+            continue
+        key, sign, spaces, integrals = canonical
         totals[key] = totals.get(key, Fraction(0)) + term.coefficient * sign
         # Terms sharing a canonical key have the same tensor structure, so their
         # externals sit in the same slots and must agree on space. A disagreement
@@ -394,27 +428,3 @@ def canonicalize(terms, externals=(), symmetry="complex"):
         # indices), so the collected term stays fully typed for a second pass.
         collected.append(CanonicalTerm(coeff, integrals_by_key[key], spaces_by_key[key]))
     return collected
-
-
-def format_canonical(terms):
-    """Pretty-print collected terms as a signed sum of tensor products.
-
-    Parameters
-    ----------
-    terms : list of CanonicalTerm
-        The collected terms.
-
-    Returns
-    -------
-    str
-        A signed-sum string, or "0" when there are no terms.
-    """
-    if not terms:
-        return "0"
-    parts = []
-    for t in terms:
-        sign = "+" if t.coefficient >= 0 else "-"
-        mag = abs(t.coefficient)
-        body = " ".join(repr(x) for x in t.integrals) or "1"
-        parts.append(f"{sign} {mag} {body}")
-    return " ".join(parts).lstrip("+ ").strip()
