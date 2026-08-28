@@ -688,6 +688,55 @@ keeps the general `f_ov` (Brillouin) terms that Eq. 27 drops at canonical HF;
   (`main.pdf`/`theory.tex`, and the textbooks — e.g. Helgaker "Molecular
   Electronic Structure Theory", eq. numbers like 10.2.5).
 
+### Test suite layout (file order mirrors the README pipeline)
+
+**File number = position in the pipeline.** The suite reads bottom-up in one pass,
+from the base quantities to the interface a user actually touches. A new test lands
+in the file for the layer it exercises; a new *module* gets a new numbered file at
+its pipeline position.
+
+| file | layer / module |
+|---|---|
+| `test_001_operators.py` | base quantities — `operators.py` |
+| `test_002_contraction.py` | elementary hole/particle rule — `contraction.py` |
+| `test_003_policy.py` | `may_contract` eligibility — `policy.py` |
+| `test_004_wick_vev.py` | full-contraction driver — `wick.py` |
+| `test_005_resolve.py` | delta resolution — `resolve.py` |
+| `test_006_contract_blocks.py` | factor-aware driver — `wick.py` |
+| `test_007_canonicalize.py` | symmetry + collection — `canonicalize.py` |
+| `test_008_expression.py` | the algebra — `expression.py` |
+| `test_009_operator_library.py` | the operators — `operator_library.py` |
+| `test_010_problem.py` | input interface — `problem.py` |
+| `test_011_MP2.py` … `test_014_CCSD.py` | worked methods (MP2, CID, CISD, CCSD) |
+| `test_015_orbital_rotation.py` | orbital gradient (holds both `xfail`s) |
+| `test_016_spin_adapt.py` | closed-shell spin adaptation — `spin_adapt.py` |
+
+The standard every file meets, set by the method tests and carried down:
+
+1. **Module docstring names the layer and what it is responsible for** — one short
+   paragraph, not a history.
+2. **Test docstring states the rule or expression being evaluated**, not a
+   description of the result. Method layers use bra-ket form
+   (`E_corr = < Φ_0 | H_N (1 + T2) | Φ_0 >`); base layers cite the physics rule and
+   its `main.pdf` equation number.
+3. **Assertions pin the complete output.** No `assert len(...)` standing in for an
+   equation; `len` survives only where the count *is* the claim.
+4. **The expected value is derived, never read off the engine.** If an assertion
+   fails, work out the right answer — the test changes to the physically correct
+   value, not to whatever was emitted (the priority rule, applied to tests).
+5. **Non-obvious output is decoded** — density orbital blocks, spatial output.
+6. **Helpers live in `fapy/tests/utils.py`**, so `test_*` modules read as scenarios
+   and assertions only.
+
+**Mutation-test a layer before committing it.** Mutate the module it covers, run
+that file, restore. Every layer of the audit found at least one gap this way that
+review had missed, several of them tests that could not fail as written. Two
+recurring traps worth knowing: `Integral` declares `symmetry`/`hermitian`/
+`spin_rule` with `compare=False` and `free` lives on the `Expression` rather than
+its terms, so **equality assertions are blind to all four** and must be checked
+separately; and restore the mutated file from the script's own copy — a
+`git checkout <file>` will silently revert unstaged edits you meant to keep.
+
 ### Docstring / comment formatting (current preference — supersedes any older note)
 Model on the sibling **`apyib`** package. This replaces the earlier
 "verbose notebook-style narration" preference.
