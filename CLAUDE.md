@@ -683,6 +683,37 @@ for a question that is genuinely open, not a parking space for an unchecked numb
   engine fully general. Symmetry already travels on the `Integral` (annotation
   carried by the operator constructors), so this is the natural next extension —
   and falls out of the generic `O_N` primitive above.
+  **Closer to done than this entry suggests.** `O_N` is already rank-agnostic and a
+  three-body operator runs the whole pipeline: `<0| W3 T3 |0>` collects to
+  `(1/36) w_ijk^abc t3_ijk^abc` and `<Phi_ijk^abc| T3 |0>` to `+1 t3_ijk^abc`, both the
+  correct generalizations (`3! x 3! = 36` matchings against the two `1/(n_c! n_a!)`
+  prefactors, exactly parallel to the doubles `(1/4)(1/4) x 4 = 1/4`). The triples
+  manifold is `O_N(None, …, free=…)` and the triples antisymmetry is four adjacent
+  transpositions, which close to `S3 x S3`. What is missing is presets, not machinery.
+- **Validating a declared symmetry — the trap in higher-rank custom operators.**
+  Nothing supplies or checks the symmetry generators above two-body, and a wrong or
+  missing declaration is **silently wrong**: the term simply under-collects, so the
+  equation comes out with too many terms and no error anywhere. This is the worst
+  failure shape in the package (see "Latent assumptions to audit"), and it grows with
+  rank — a triples trio needs antisymmetry across all three slots, and declaring only
+  one transposition closes to `S2` instead of `S3`.
+  Three checks are worth having, and they are independent:
+  (a) **rank ≥ 3 with nothing declared** — plausible as an oversight, since 1- and
+  2-body have presets to fall back on and higher ranks do not (but a genuinely
+  non-symmetric high-rank tensor is a legitimate object, so this needs a way to assert
+  "none" on purpose — note `()` is already taken as exactly that, so it would need a
+  third state or a separate argument);
+  (b) **generators that do not close consistently** — the same arrangement reachable
+  with both `+1` and `−1`, which makes the tensor identically zero. Cheap to detect
+  with the existing `_symmetry_orbit` closure, and *related to the zero-term detection
+  in `canonicalize_term`* — same underlying `X = −X` argument, one applied to a tensor
+  and one to a whole term;
+  (c) **antisymmetry declared across only part of a group** — the `S2`-instead-of-`S3`
+  slip above.
+  Also open: whether these raise unconditionally (matching every other guard in the
+  engine — unspaced index, conflicting spaces, wrong-rank generator) or sit behind an
+  opt-in strictness flag so nothing currently passing starts failing. Deliberately left
+  undecided; the rank check in `_symmetry_orbit` is the only piece built.
 - **[DONE] Automatic dummy relabeling** so repeated operators (e.g. `T1*T1`,
   `[[H,T2],T2]`) need not be given disjoint index labels by hand. Solved generally by
   the **free/bound index model + capture-avoiding `Expression.__mul__`** (see
