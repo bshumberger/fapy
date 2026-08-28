@@ -600,8 +600,10 @@ Problem(
 - **Library index labels are required, not defaulted.** `singles`/`doubles`/
   `singles_dagger`/`doubles_dagger`/`bra_*`/`ket_*`/`kappa` all take explicit index
   arguments (no defaults) so a repeated operator can't silently collide dummies.
-- `Problem.derive()` returns collected `CanonicalTerm`s; `format_canonical`
-  (a separate call, not a `Problem` method) renders them as a printed equation.
+- `Problem.derive()` returns collected `CanonicalTerm`s, each of which prints
+  itself; an input file loops over them. The package ships no formatting helper —
+  `report()` and `format_canonical()` were both removed as printing conveniences
+  with no caller.
 - The user does any **BCH / `exp(T)` expansion by hand** and hands the engine the
   resulting expression; `left_nested_commutator(H, T, T, ...)` transcribes
   `[[H,T],T]`-style terms. Worked problems are stated inline in the numbered

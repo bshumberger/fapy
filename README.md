@@ -49,8 +49,9 @@ terms = Problem(
     ket  = op.reference(),
 ).derive()
 
-print(format_canonical(terms))
-# 1/4 g(O0,O1,V0,V1) t(O0,O1,V0,V1)
+for term in terms:
+    print(term)
+# +1/4 g(O0,O1,V0,V1) t(O0,O1,V0,V1)
 ```
 
 See the worked problems in `fapy/tests/test_011_MP2.py`,
@@ -169,9 +170,9 @@ Problem.derive()
 │               └─ _symmetry_orbit(...)                        close the symmetry group
 ```
 
-`format_canonical(terms)` `(canonicalize.py)` renders the collected result as a
-printed equation, e.g. `1/4 g(O0,O1,V0,V1) t(O0,O1,V0,V1)`; it is a separate call,
-not part of the derivation.
+`.derive()` returns a list of `CanonicalTerm`s. Each prints itself
+(`+1/4 g(O0,O1,V0,V1) t(O0,O1,V0,V1)`), so an input file writes the equation out by
+looping over them; the package ships no formatting helper of its own.
 
 1. `.derive()` forms the sandwich `bra * expr * ket` (one `Expression`), then calls
    two children in turn: `.vev()` to contract it and `canonicalize` to collect.
@@ -216,7 +217,7 @@ The full surface of the evaluation phase is:
 - **`canonicalize.py`**
   - `canonicalize` — the collector; `canonicalize_term`, `_dummy_labels`,
     `canonical_tensor`, `_symmetry_orbit`, `_tensor_generators` — the machinery
-  - `CanonicalTerm` — a collected term; `Symmetry` alias; `format_canonical`
+  - `CanonicalTerm` — a collected term (prints itself); `Symmetry` alias
 
 ## Installation
 

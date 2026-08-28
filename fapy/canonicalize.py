@@ -428,27 +428,3 @@ def canonicalize(terms, externals=(), symmetry="complex"):
         # indices), so the collected term stays fully typed for a second pass.
         collected.append(CanonicalTerm(coeff, integrals_by_key[key], spaces_by_key[key]))
     return collected
-
-
-def format_canonical(terms):
-    """Pretty-print collected terms as a signed sum of tensor products.
-
-    Parameters
-    ----------
-    terms : list of CanonicalTerm
-        The collected terms.
-
-    Returns
-    -------
-    str
-        A signed-sum string, or "0" when there are no terms.
-    """
-    if not terms:
-        return "0"
-    parts = []
-    for t in terms:
-        sign = "+" if t.coefficient >= 0 else "-"
-        mag = abs(t.coefficient)
-        body = " ".join(repr(x) for x in t.integrals) or "1"
-        parts.append(f"{sign} {mag} {body}")
-    return " ".join(parts).lstrip("+ ").strip()

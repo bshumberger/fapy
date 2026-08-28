@@ -39,7 +39,6 @@ from fapy.canonicalize import (
     canonical_tensor,
     canonicalize,
     canonicalize_term,
-    format_canonical,
 )
 from fapy.operator_library import (
     _DOUBLES_SYM,
@@ -519,14 +518,15 @@ def test_the_correlation_energy_collects_to_one_term():
     raw = (op.V_N * op.doubles("t2", "i", "j", "a", "b")).vev()
     assert len(raw) == 4
 
-    assert format_canonical(canonicalize(raw)) == "1/4 g(O0,O1,V0,V1) t2(O0,O1,V0,V1)"
+    assert [repr(t) for t in canonicalize(raw)] == \
+        ["+1/4 g(O0,O1,V0,V1) t2(O0,O1,V0,V1)"]
 
 
 def test_the_singles_fock_term_collects_with_coefficient_one():
     """< Phi_0 | F_N T1 | Phi_0 > = f_ia t_i^a."""
     raw = (op.F_N * op.singles("t1", "i", "a")).vev()
 
-    assert format_canonical(canonicalize(raw)) == "1 f(O0,V0) t1(O0,V0)"
+    assert [repr(t) for t in canonicalize(raw)] == ["+1 f(O0,V0) t1(O0,V0)"]
 
 
 # --- an index's space belongs to the term, not the equation -------------------
@@ -652,25 +652,3 @@ def test_an_external_spelled_with_a_leading_slot_letter_keeps_its_space():
 
     (collected,) = canonicalize([term], externals=("Oa",))
     assert collected.index_spaces["Oa"] == "virt"
-
-
-# --- the printed equation -----------------------------------------------------
-
-def test_format_canonical_prints_a_signed_sum():
-    """The output a user actually reads, leading + stripped."""
-    printed = format_canonical([
-        CanonicalTerm(Fraction(-1, 2), [Integral("f", ("O0", "V0"))]),
-        CanonicalTerm(Fraction(1), [Integral("t", ("O0", "V0"))]),
-    ])
-
-    assert printed == "- 1/2 f(O0,V0) + 1 t(O0,V0)"
-
-
-def test_format_canonical_prints_an_empty_equation_as_zero():
-    """An equation with no surviving terms is 0, not an empty string."""
-    assert format_canonical([]) == "0"
-
-
-def test_format_canonical_prints_a_bare_coefficient_as_a_number():
-    """A term whose factors all contracted away is a pure number."""
-    assert format_canonical([CanonicalTerm(Fraction(3), [])]) == "3 1"

@@ -40,7 +40,6 @@ from .canonicalize import (
     CanonicalTerm,
     canonicalize,
     canonical_tensor,
-    format_canonical,
 )
 from .problem import Problem
 from . import operator_library
@@ -79,7 +78,6 @@ __all__ = [
     "CanonicalTerm",
     "canonicalize",
     "canonical_tensor",
-    "format_canonical",
     "Problem",
     "operator_library",
 ]
