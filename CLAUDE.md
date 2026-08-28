@@ -217,6 +217,24 @@ Audit results (each examined; resolution noted):
 - **[HARDENED] External space read from spelling before the table.** `canonicalize`'s
   space rebuild now checks the externals table before the `O#/V#` spelling, so an external
   spelled with a leading uppercase `O`/`V` keeps its declared space.
+- **[OPEN — found in the layer-7 test audit] An EMPTY symmetry annotation is
+  indistinguishable from NO annotation, so the name table still fires.**
+  `_tensor_generators` branches on `if tensor.symmetry or tensor.hermitian:` — both empty
+  tuples are falsy, so a tensor that carries no *definitional* symmetry falls through to
+  the name-keyed fallback no matter how it was built. A one-body operator has no
+  definitional symmetry by construction, so `O_N("f", [("p","gen")], [("q","gen")])`
+  produces `symmetry=() hermitian=()` and is silently handed the real-mode Fock
+  Hermiticity `f_pq = f_qp` **purely because of its name** — renaming it to `"myop"`
+  changes the collected equation. This is the exact name-sniffing that
+  `Integral.hermitian` was introduced to eliminate; the earlier fix closed the
+  *annotated* case and left the un-annotatable one open. Narrow (needs empty symmetry
+  AND empty hermitian AND a name in `_SYMMETRY_GENERATORS`/`_HERMITIAN_SYMMETRY`) but
+  reachable from `O_N`, which is the user-facing custom-operator primitive, and wrong in
+  the silent direction: a merge that should not happen, with a doubled coefficient.
+  **Fix:** a sentinel (e.g. `symmetry=None` meaning "not declared" vs `()` meaning
+  "declared to have none"), so the fallback fires only on genuine absence. Pinned as a
+  `strict=True` xfail:
+  `test_007_canonicalize.py::test_a_custom_operator_does_not_inherit_hermiticity_from_its_name`.
 - **[OPEN — deferred] A malformed operator string is accepted silently.** Nothing validates
   that a label names *one* index. `declared_spaces` catches only a label declared with two
   different *spaces*; `block()` and `group_string()` validate nothing at all, so a degenerate
