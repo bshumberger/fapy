@@ -183,10 +183,9 @@ def test_the_run_mode_reaches_the_collector():
 
     f_pq = f_qp is Hermiticity, exact only when the orbitals are real, so the
     complex run keeps f(O0,V0) and f(V0,O0) apart and the real run folds them into
-    one term whose coefficient is their sum. (The gradient's MAGNITUDE is a
-    separate open question, pinned as an xfail in test_015_orbital_rotation.py;
-    what is asserted here is only that the mode is threaded through, which the
-    sum relation states without depending on the value.)
+    one term whose coefficient is their sum. Asserting the sum relation rather
+    than the magnitude keeps this test about the threading; the gradient's value
+    is derived and pinned in test_015_orbital_rotation.py.
     """
     def gradient(symmetry):
         return Problem(name="orbital gradient",

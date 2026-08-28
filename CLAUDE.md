@@ -595,6 +595,24 @@ keeps the general `f_ov` (Brillouin) terms that Eq. 27 drops at canonical HF;
 `test_015_orbital_rotation.py` the orbital gradient `<0|[F_N, κ]|0>` (and
 `<0|[V_N, κ]|0>=0`).
 
+**The orbital-gradient factor is settled — it is `−1` per term, not `−1/2`.** This
+was carried for a while as a `strict` xfail ("factor-of-2 pending a hand-derivation
+against `main.pdf`") after the collision guard showed the engine giving twice the
+asserted value. The derivation was done and it confirms the **engine**, not the old
+assertion; the xfail is removed and the test now asserts `−1` (complex, two terms)
+and `−2` (real, one term). With `κ = ½ Σ_pq κ_pq E_pq^-` and `κ_pq` antisymmetric:
+
+- `<0|[H, a_a^ a_i]|0> = + f_ia` — only the `H a_a^ a_i` ordering survives, since
+  `<0| a_a^ = 0`;
+- `<0|[H, a_i^ a_a]|0> = − f_ai` — only the other ordering survives, since `a_a|0> = 0`;
+- so `<0|[H, E_ai^-]|0> = f_ia + f_ai`, and summing over all `p,q` while folding the
+  two halves with `κ_ai = −κ_ia` gives
+  `½[Σ κ_ai(f_ia+f_ai) − Σ κ_ia(f_ia+f_ai)] = −Σ κ_ia (f_ia + f_ai)`.
+
+The lesson is the one in the priority rule: the old `−1/2` was never re-derived after
+the labels were fixed, and an xfail preserved it instead of settling it. An xfail is
+for a question that is genuinely open, not a parking space for an unchecked number.
+
 ### Desirable future features (not built)
 - **Generic N-body operator `O_N` — primitive BUILT; presets refactor still open.**
   Most of the library is one operator wearing different clothes: `F_N`/`singles`
@@ -708,7 +726,7 @@ its pipeline position.
 | `test_009_operator_library.py` | the operators — `operator_library.py` |
 | `test_010_problem.py` | input interface — `problem.py` |
 | `test_011_MP2.py` … `test_014_CCSD.py` | worked methods (MP2, CID, CISD, CCSD) |
-| `test_015_orbital_rotation.py` | orbital gradient (holds both `xfail`s) |
+| `test_015_orbital_rotation.py` | orbital gradient — `<0|[F_N, κ]|0>` |
 | `test_016_spin_adapt.py` | closed-shell spin adaptation — `spin_adapt.py` |
 
 The standard every file meets, set by the method tests and carried down:
