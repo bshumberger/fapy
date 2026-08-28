@@ -539,7 +539,7 @@ Problem(
     bra  = op.reference(),            # <Phi_0|   (op.bra_doubles(...) for a projection)
     expr = op.V_N * op.doubles("t", "i", "j", "a", "b"),  # the operator expression — the "problem"
     ket  = op.reference(),            # |Phi_0>
-).report()
+).derive()
 ```
 
 - `expr` is built from the operator library and the expression algebra (`*`,
@@ -578,7 +578,8 @@ Problem(
 - **Library index labels are required, not defaulted.** `singles`/`doubles`/
   `singles_dagger`/`doubles_dagger`/`bra_*`/`ket_*`/`kappa` all take explicit index
   arguments (no defaults) so a repeated operator can't silently collide dummies.
-- `Problem.derive()` returns collected `CanonicalTerm`s; `.report()` prints them.
+- `Problem.derive()` returns collected `CanonicalTerm`s; `format_canonical`
+  (a separate call, not a `Problem` method) renders them as a printed equation.
 - The user does any **BCH / `exp(T)` expansion by hand** and hands the engine the
   resulting expression; `left_nested_commutator(H, T, T, ...)` transcribes
   `[[H,T],T]`-style terms. Worked problems are stated inline in the numbered
@@ -706,7 +707,7 @@ Model on the sibling **`apyib`** package. This replaces the earlier
 - **`README.md` has an end-to-end pipeline walkthrough** ("From input to output"):
   the **build phase** as nested *types* (`Problem ⊃ Expression ⊃ ExprTerm ⊃
   OperatorBlock ⊃ {Operator, Integral}`) and the **evaluation phase** as nested
-  *calls* (the `report → derive → vev/canonicalize → …` tree), each with a per-file
+  *calls* (the `derive → vev/canonicalize → …` tree), each with a per-file
   surface list. Read it to reorient on where things live.
 
 ### Naming

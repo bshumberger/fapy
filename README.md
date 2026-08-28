@@ -42,17 +42,19 @@ operators remain out of scope.
 ```python
 from fapy import Problem, operator_library as op
 
-Problem(
+terms = Problem(
     name = "MP2 energy",
     bra  = op.reference(),
     expr = op.V_N * op.doubles("t", "i", "j", "a", "b"),
     ket  = op.reference(),
-).report()
-# MP2 energy: 1/4 g(O0,O1,V0,V1) t(O0,O1,V0,V1)
+).derive()
+
+print(format_canonical(terms))
+# 1/4 g(O0,O1,V0,V1) t(O0,O1,V0,V1)
 ```
 
-See the worked problems in `fapy/tests/test_007_MP2.py`,
-`test_008_CISD.py`, and `test_009_CCSD.py`.
+See the worked problems in `fapy/tests/test_022_MP2.py`,
+`test_023_CID.py`, `test_024_CISD.py`, and `test_025_CCSD.py`.
 
 ## Layout
 
@@ -139,12 +141,11 @@ The full surface of the build-phase is:
 **Evaluation phase**
 
 Where the build phase nests *types* (each contains the next), evaluation nests
-*calls* (each function invokes the next). `.report()` sits at the top; the tree of
+*calls* (each function invokes the next). `.derive()` sits at the top; the tree of
 calls beneath it does the work:
 
 ```
-Problem.report()
-├─ Problem.derive()
+Problem.derive()
 │   ├─ bra * expr * ket              Expression.__mul__       form the sandwich Expression
 │   ├─ Expression.vev()                                       → Terms  (loops over ExprTerm)
 │   │   └─ contract_blocks(*blocks)          (wick.py)
@@ -166,12 +167,13 @@ Problem.report()
 │           └─ canonical_tensor(tensor, symmetry)  (per tensor)
 │               ├─ _tensor_generators(...)                     which symmetries apply
 │               └─ _symmetry_orbit(...)                        close the symmetry group
-└─ format_canonical(terms)          (canonicalize.py)          → printed equation
 ```
 
-1. `.report()` calls `.derive()` to build the equation, then `format_canonical` to
-   print it, e.g. `1/4 g(O0,O1,V0,V1) t(O0,O1,V0,V1)`.
-2. `.derive()` forms the sandwich `bra * expr * ket` (one `Expression`), then calls
+`format_canonical(terms)` `(canonicalize.py)` renders the collected result as a
+printed equation, e.g. `1/4 g(O0,O1,V0,V1) t(O0,O1,V0,V1)`; it is a separate call,
+not part of the derivation.
+
+1. `.derive()` forms the sandwich `bra * expr * ket` (one `Expression`), then calls
    two children in turn: `.vev()` to contract it and `canonicalize` to collect.
 3. `Expression.vev()` **fans out** over every `ExprTerm`, calling `contract_blocks`
    on its product of `OperatorBlock` objects.
@@ -194,7 +196,7 @@ Problem.report()
 The full surface of the evaluation phase is:
 
 - **`problem.py`**
-  - `Problem` methods `external_indices`, `derive`, `report`
+  - `Problem` methods `external_indices`, `derive`
 - **`expression.py`**
   - `Expression.vev`; `connected` — mark an operator's blocks mutually connected
 - **`wick.py`**
@@ -228,7 +230,7 @@ After that, `import fapy` works from any directory, so an input file can live
 anywhere:
 
 ```
-python my_problem.py     # a script that builds a Problem and calls .report()
+python my_problem.py     # a script that builds a Problem and calls .derive()
 ```
 
 ## Running the tests

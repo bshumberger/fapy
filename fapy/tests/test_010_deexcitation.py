@@ -1,5 +1,14 @@
 """
-CID energy matrix elements, from CID_derivation/theory.tex (spin-orbital).
+Holding pen -- awaiting the CID method file.
+
+CID energy matrix elements, from CID_derivation/theory.tex (spin-orbital). These
+are notes-grounded checks of individual matrix elements rather than a full method
+derivation, so they belong beside the CID method tests (test_023_CID.py, which
+the rename phase makes test_012_CID.py), not at any pipeline layer. They stay
+here until that move.
+
+The projection-externals regression that was also in this file has been absorbed
+into test_010_problem.py, where the externals rule belongs.
 
 These exercise the de-excitation operators (C-dagger) in a full sandwich
 <Phi_0| C2-dagger H_N C2 |Phi_0>. Unlike the single-term energies, each is a
@@ -20,7 +29,7 @@ keeps the two apart; the two operators are given DISJOINT dummy labels.
 
 from fractions import Fraction
 
-from fapy import Problem, canonicalize, operator_library as op
+from fapy import canonicalize, operator_library as op
 from fapy.tests.utils import term_multiset
 
 
@@ -86,26 +95,3 @@ def test_c2dagger_v_n_c2_three_terms_ladders_and_ring():
         occ_counts.append(sum(t.index_spaces[i] == "occ" for i in g.indices))
     # ladders: 4 occupied (<ij||kl>) and 0 occupied (<ab||cd>); ring: 2 occupied.
     assert sorted(occ_counts) == [0, 2, 4]
-
-
-def test_deexcitation_projected_onto_ket_keeps_large_externals():
-    """<0| C2d |Phi_kl^cd> = c_kl^cd, a projection whose externals are lex-large.
-
-    The de-excitation sums over i, j, a, b while the ket fixes k, l, c, d as
-    externals -- lexically after the summed labels. Resolution must keep the ket's
-    externals rather than renaming them onto the smaller dummies; otherwise the
-    four surviving contractions collapse onto one tensor and cancel to zero. This
-    is the projection-externals regression (the MP2 lambda-amplitude shape).
-    """
-    sigma = Problem(
-        name="deexcitation overlap",
-        bra=op.reference(),
-        expr=op.doubles_dagger("cd", "i", "j", "a", "b"),
-        ket=op.ket_doubles("k", "l", "c", "d"),
-    ).derive()
-
-    # One surviving term: + cd(k,l,c,d), all four indices external.
-    assert term_multiset(sigma) == {(Fraction(1), ("cd",)): 1}
-    (term,) = sigma
-    (amp,) = term.integrals
-    assert amp.indices == ("k", "l", "c", "d")
