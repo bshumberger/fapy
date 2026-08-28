@@ -266,12 +266,13 @@ Audit results (each examined; resolution noted):
   `test_007_canonicalize.py::test_a_custom_operator_does_not_inherit_symmetry_from_its_name`
   (was a `strict` xfail; the fix turned it XPASS and it is now an ordinary test) beside
   `test_a_bare_tensor_falls_back_to_the_name_table`, which pins the fallback.
-  **Residual, not fixed:** `_symmetry_orbit` still applies a generator without checking
-  its permutation length against the tensor's rank, so the crash and the truncation are
-  still reachable for a bare hand-built tensor whose name collides at the wrong arity
-  (`Integral("g", ("i","a"))`, `Integral("f", ("i","j","a","b"))`). Test-only code
-  constructs bare tensors, so the surface is small, but a length check in
-  `_symmetry_orbit` would turn silent index loss into a loud error and is worth doing.
+  **Also fixed: `_symmetry_orbit` now rejects a generator whose rank differs from the
+  tensor's.** That was the second half of both extra modes, and it is the only remaining
+  route to them once `O_N` declares — a bare hand-built tensor whose name collides with
+  a fallback table of a different rank (`Integral("g", ("i","a"))`,
+  `Integral("f", ("i","j","a","b"))`). A `ValueError` naming both ranks replaces an
+  `IndexError` far from the cause and, worse, the silent index loss. Regression:
+  `test_a_generator_of_the_wrong_rank_is_rejected`.
 - **[OPEN — deferred] A malformed operator string is accepted silently.** Nothing validates
   that a label names *one* index. `declared_spaces` catches only a label declared with two
   different *spaces*; `block()` and `group_string()` validate nothing at all, so a degenerate

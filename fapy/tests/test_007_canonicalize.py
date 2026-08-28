@@ -138,6 +138,32 @@ def test_a_tensor_with_no_symmetry_has_an_orbit_of_itself():
     assert list(_symmetry_orbit([], ("i", "a"))) == [(("i", "a"), 1)]
 
 
+def test_a_generator_of_the_wrong_rank_is_rejected():
+    """A symmetry rule must permute exactly as many slots as the tensor has.
+
+    Reachable only through the name-keyed fallback, which is the one place a rule
+    is paired with a tensor by SPELLING rather than by construction: a bare
+    two-index tensor named "g" meets the four-index ERI rules, and a bare
+    four-index tensor named "f" meets the two-index Fock transpose.
+
+    Both were silently wrong before. The long-on-short case indexed past the end
+    of the tuple, raising an IndexError far from the cause; the short-on-long case
+    was worse, building a SHORTER tuple that then won the lexicographic minimum
+    (a prefix sorts before the longer tuple), so f(i,j,a,b) collapsed to f(i,j)
+    and the term quietly lost two indices.
+    """
+    for indices in (("i", "a"), ("i", "j", "a", "b", "k", "c")):
+        with pytest.raises(ValueError, match="must match the tensor"):
+            canonical_tensor(Integral("g", indices), "real")
+
+    with pytest.raises(ValueError, match="must match the tensor"):
+        canonical_tensor(Integral("f", ("i", "j", "a", "b")), "real")
+
+    # Matching ranks are untouched.
+    assert canonical_tensor(Integral("g", ("j", "i", "a", "b")))[1] == -1
+    assert canonical_tensor(Integral("f", ("i", "a")), "real")[0].indices == ("a", "i")
+
+
 def test_canonical_tensor_takes_the_smallest_arrangement_and_its_sign():
     """g(O1,O0,V0,V1) -> -g(O0,O1,V0,V1): one swap, so one sign flip."""
     reduced, sign = canonical_tensor(Integral("g", ("O1", "O0", "V0", "V1")))

@@ -117,13 +117,40 @@ def _symmetry_orbit(generators, indices):
     tuple
         Each reachable (index tuple, sign) pair.
 
+    Raises
+    ------
+    ValueError
+        If a generator permutes a different number of slots than the tensor has
+        indices.
+
     Notes
     -----
     Starting from ``indices`` with sign +1, the generator permutations are applied
     repeatedly -- a breadth-first closure -- until no new signed arrangement
     appears. This closes the generators into the full symmetry group, expressed
     directly as the set of arrangements the tensor's indices can take.
+
+    A generator's rank must match the tensor's, and a mismatch is rejected rather
+    than applied. Without the check the arithmetic still "works" and is silently
+    wrong in both directions: a longer permutation indexes past the end of the
+    tuple (an IndexError far from the cause), and a SHORTER one builds a shorter
+    tuple -- so a two-slot rule on a four-index tensor yields a two-index tensor,
+    which then wins the lexicographic minimum because a prefix sorts before the
+    longer tuple, and the term quietly loses two indices. Only a tensor that
+    declares nothing can reach a mismatched generator, since the name-keyed
+    fallback tables are the one place a rule is paired with a tensor by spelling
+    rather than by construction.
     """
+    for perm, _sign in generators:
+        if len(perm) != len(indices):
+            raise ValueError(
+                f"symmetry generator permutes {len(perm)} slots but the tensor has "
+                f"{len(indices)} indices {tuple(indices)!r}; a generator's rank must "
+                "match the tensor it is applied to (a bare tensor whose name collides "
+                "with a fallback table of a different rank is the usual cause -- "
+                "declare its symmetry explicitly)."
+            )
+
     # A breadth-first closure over states, each a (index tuple, sign) pair.
     seen = {tuple(indices): 1}
     frontier = [tuple(indices)]
