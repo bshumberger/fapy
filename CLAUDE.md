@@ -183,7 +183,7 @@ Audit results (each examined; resolution noted):
   named Fock/ERI was under-merged (duplicates) and a name collision over-merged with a
   folded sign. Now Hermiticity travels on the tensor: `Integral.hermitian` (set by
   `F_N`/`V_N`/`O_N`), read in `_tensor_generators`; the name tables are a fallback only
-  for a *bare* hand-built tensor (no annotation). Regression `test_018_hardening`.
+  for a *bare* hand-built tensor (no annotation). Regression `test_007_canonicalize.py`.
 - **[FIXED] An external index's space was pooled across terms.** `canonicalize` built
   ONE `external_spaces` dict by looping over every term (last write wins) and stamped it
   on all of them. The latent assumption: *a label has one orbital space for the whole
@@ -207,7 +207,7 @@ Audit results (each examined; resolution noted):
   when `contract_blocks` builds a `Term`), and `Integral.relabel_indices` substitutes labels
   purely textually, so a drifted dict gets *written into* the tensors unchallenged. The
   structural fix is to put per-slot spaces on `Integral` and make the dict derived rather
-  than authoritative. Regression: `test_021_external_spaces.py`.
+  than authoritative. Regression: `test_007_canonicalize.py`.
 - **[GUARDED] A summed index that reaches canonicalization without an `occ`/`virt` space**
   was silently left un-renamed (behaving like an external, blocking collection).
   `_dummy_labels` now raises instead (`canonicalize.py`).
@@ -323,7 +323,7 @@ no operators, so it never appears in the graph and is never required to connect.
 CI residual genuinely keeps its disconnected `E_corr c_mu` piece, and a density with
 `Lambda` has a different connectedness structure than `(H exp(T))_C`.
 
-Validated in `test_020_connected.py`: the CCSD energy is unchanged by the annotation
+Validated in `test_008_expression.py`: the CCSD energy is unchanged by the annotation
 (connectedness is automatic there — cluster operators are pure quasi-particle creators,
 so no T-T contraction is nonzero); the T2 doubles residual and the T1+T2 singles
 residual agree **term for term** with the BCH nested-commutator route; and the full
@@ -356,7 +356,7 @@ MPn, UCC, commutators, `exp(T)`, densities), not anything CC/CI-specific.
   unifies bra/ket manifold externals with a density's interior target-operator externals
   under one rule. `one_body(p,q)`/`two_body(p,q,r,s)` build bare `{p†q}`/`{p†q†sr}`
   density targets (over `O_N(None, …)`) with their indices declared free.
-- Regression: `test_017_index_hygiene.py` (shared-`T` commutator ≡ hand-disjoint,
+- Regression: `test_008_expression.py` (shared-`T` commutator ≡ hand-disjoint,
   frees preserved / capture avoided, metadata preserved, externals inferred from an
   interior target).
 
@@ -443,7 +443,7 @@ and higher-spin are explicitly out of scope; do not build toward them. The kerne
 worked methods remain **spin-orbital** — spin adaptation does *not* touch the kernel,
 operators, contraction, resolve, or the existing `canonicalize`.
 
-**Status: built and validated for CISD** (`fapy/spin_adapt.py`, `test_019_spin_adapt.py`).
+**Status: built and validated for CISD** (`fapy/spin_adapt.py`, `test_016_spin_adapt.py`).
 `spin_adapt(canonical_terms, targets={...}, symmetry="real")` runs the five-step pass below
 over `.derive()` output. Validated end to end against the notes: the energy (eq 9,
 `2 f_ia c_i^a + Σ[2⟨ij|ab⟩−⟨ij|ba⟩]c_ij^ab`), the singles residual (eq 10, terms 1–5
@@ -583,16 +583,16 @@ Problem(
 - The user does any **BCH / `exp(T)` expansion by hand** and hands the engine the
   resulting expression; `left_nested_commutator(H, T, T, ...)` transcribes
   `[[H,T],T]`-style terms. Worked problems are stated inline in the numbered
-  method tests (`test_007_MP2.py` … `test_012_orbital_rotation.py`).
+  method tests (`test_011_MP2.py` … `test_015_orbital_rotation.py`).
 - **Repeated operators need disjoint dummy labels** (auto-relabeling is a future
   item): give each excitation/de-excitation instance its own indices.
 
 ### Notes-grounded test cases
-`test_010_deexcitation.py` encodes the CID energy matrix elements
-(`CID_derivation/theory.tex`); `test_011_CISD_residual.py` the spin-orbital CISD
+`test_012_CID.py` encodes the CID equations (`CID_derivation/theory.tex`) in both
+the projected and Lagrangian forms; `test_013_CISD.py` the spin-orbital CISD
 singles/doubles residuals (Eqs. 25 & 27 from the handwritten notes) — the engine
 keeps the general `f_ov` (Brillouin) terms that Eq. 27 drops at canonical HF;
-`test_012_orbital_rotation.py` the orbital gradient `<0|[F_N, κ]|0>` (and
+`test_015_orbital_rotation.py` the orbital gradient `<0|[F_N, κ]|0>` (and
 `<0|[V_N, κ]|0>=0`).
 
 ### Desirable future features (not built)

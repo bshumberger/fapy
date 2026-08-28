@@ -53,8 +53,8 @@ print(format_canonical(terms))
 # 1/4 g(O0,O1,V0,V1) t(O0,O1,V0,V1)
 ```
 
-See the worked problems in `fapy/tests/test_022_MP2.py`,
-`test_023_CID.py`, `test_024_CISD.py`, and `test_025_CCSD.py`.
+See the worked problems in `fapy/tests/test_011_MP2.py`,
+`test_012_CID.py`, `test_013_CISD.py`, and `test_014_CCSD.py`.
 
 ## Layout
 
