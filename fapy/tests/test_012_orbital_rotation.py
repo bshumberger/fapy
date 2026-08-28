@@ -1,15 +1,13 @@
 """
-The orbital rotation operator and its use in an orbital-response commutator.
+The orbital gradient: an orbital-response commutator, evaluated.
 
-kappa is the true generator kappa = sum_{p>q} kappa_pq E_pq^-, built as the
-half-weighted antisymmetric two-term form
+How kappa is BUILT -- the half-weighted antisymmetric difference
+(1/2) kappa_pq (a_p^ a_q - a_q^ a_p), and why both the 1/2 and the antisymmetry
+annotation are needed to make it the generator rather than twice it -- belongs to
+the operator library and is pinned in test_009_operator_library.py. What is left
+here is the physics the generator exists for.
 
-    (1/2) kappa_pq (a_p^ a_q - a_q^ a_p)
-
-with kappa_pq annotated antisymmetric; the 1/2 and the annotation together make
-(1/2) sum_{all p,q} equal sum_{p>q}, so the contracted result is normalized as
-the physical generator. The physically meaningful check is the orbital gradient:
-commuting the normal-ordered Hamiltonian with kappa and taking the reference
+Commuting the normal-ordered Hamiltonian with kappa and taking the reference
 expectation value isolates the occupied-virtual Fock block (the Brillouin
 condition), while the fluctuation potential contributes nothing.
 """
@@ -32,27 +30,6 @@ _GRADIENT_UNDER_REVIEW = pytest.mark.xfail(
     reason="orbital-gradient factor-of-2 pending hand-derivation vs main.pdf",
     strict=True,
 )
-
-
-def test_kappa_is_two_antisymmetric_terms():
-    """(1/2) kappa_pq (a_p^ a_q - a_q^ a_p): two half-weight terms, one amplitude."""
-    k = op.kappa("kap", "p", "q")
-
-    assert len(k.terms) == 2
-    plus = next(t for t in k.terms if t.coefficient > 0)
-    minus = next(t for t in k.terms if t.coefficient < 0)
-    assert plus.coefficient == Fraction(1, 2)
-    assert minus.coefficient == Fraction(-1, 2)
-
-    # +term is {a_p^ a_q}, -term is {a_q^ a_p}; both carry the amplitude kap_pq,
-    # which is annotated antisymmetric (kap_pq = -kap_qp).
-    (plus_block,) = plus.blocks
-    (minus_block,) = minus.blocks
-    assert [(o.label, o.dagger) for o in plus_block.ops] == [("p", True), ("q", False)]
-    assert [(o.label, o.dagger) for o in minus_block.ops] == [("q", True), ("p", False)]
-    assert plus_block.integral.name == "kap" and plus_block.integral.indices == ("p", "q")
-    assert minus_block.integral.name == "kap" and minus_block.integral.indices == ("p", "q")
-    assert plus_block.integral.symmetry == (((1, 0), -1),)
 
 
 @_GRADIENT_UNDER_REVIEW
