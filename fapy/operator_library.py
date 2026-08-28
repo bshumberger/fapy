@@ -62,11 +62,17 @@ def O_N(name, creators, annihilators, tensor_indices=None, symmetry=(), hermitia
         occupied indices come first.
     symmetry : tuple, optional
         Definitional (mode-independent) permutational symmetry generators stamped on
-        the factor (see ``operators.py``).
+        the factor (see ``operators.py``). **Defaults to none, and that default is a
+        DECLARATION, not a silence**: an operator built here is never handed a
+        symmetry from canonicalize's name-keyed fallback tables, whatever it is
+        called. Choosing ``O_N`` is the point at which the user takes control of the
+        operator, so a name collision must not override them -- ``O_N("f", ...)``
+        gets exactly the symmetry written here and nothing else.
     hermitian : tuple, optional
         Hermiticity (real-orbital-only) symmetry generators stamped on the factor,
         applied only in a "real" run. Set it for a Fock/ERI-type tensor so its
         Hermiticity travels with the operator instead of being looked up by name.
+        Defaults to none, declared, on the same footing as ``symmetry``.
     spin_rule : str, optional
         Structural spin-coupling type ("fock"/"eri"/"amplitude"), read only by the
         closed-shell spin-adaptation pass to tell constraint-imposing Hamiltonian
@@ -126,7 +132,7 @@ def O_N(name, creators, annihilators, tensor_indices=None, symmetry=(), hermitia
 F_N = Expression.single(
     block(
         [cre("p", "gen"), ann("q", "gen")],
-        Integral("f", ("p", "q"), hermitian=_FOCK_HERMITIAN, spin_rule="fock"),
+        Integral("f", ("p", "q"), (), _FOCK_HERMITIAN, "fock"),
     ),
     Fraction(1),
 )
@@ -176,7 +182,7 @@ def singles(name, i, a):
     """
     return Expression.single(
         block([cre(a, "virt"), ann(i, "occ")],
-              Integral(name, (i, a), spin_rule="amplitude")),
+              Integral(name, (i, a), (), (), "amplitude")),
         Fraction(1),
     )
 
@@ -207,7 +213,7 @@ def doubles(name, i, j, a, b):
     return Expression.single(
         block(
             [cre(a, "virt"), cre(b, "virt"), ann(j, "occ"), ann(i, "occ")],
-            Integral(name, (i, j, a, b), _DOUBLES_SYM, spin_rule="amplitude"),
+            Integral(name, (i, j, a, b), _DOUBLES_SYM, (), "amplitude"),
         ),
         Fraction(1, 4),
     )
@@ -243,7 +249,7 @@ def singles_dagger(name, i, a):
     """
     return Expression.single(
         block([cre(i, "occ"), ann(a, "virt")],
-              Integral(name, (i, a), spin_rule="amplitude")),
+              Integral(name, (i, a), (), (), "amplitude")),
         Fraction(1),
     )
 
@@ -272,7 +278,7 @@ def doubles_dagger(name, i, j, a, b):
     return Expression.single(
         block(
             [cre(i, "occ"), cre(j, "occ"), ann(b, "virt"), ann(a, "virt")],
-            Integral(name, (i, j, a, b), _DOUBLES_SYM, spin_rule="amplitude"),
+            Integral(name, (i, j, a, b), _DOUBLES_SYM, (), "amplitude"),
         ),
         Fraction(1, 4),
     )
@@ -303,7 +309,7 @@ def scalar(name):
     ``E_corr c_ij^ab`` is written ``scalar("E_corr") * doubles("c", ...)`` projected
     onto the doubles manifold, so the whole residual can be stated in the input.
     """
-    return Expression.single(block([], Integral(name, ())), Fraction(1))
+    return Expression.single(block([], Integral(name, (), (), ())), Fraction(1))
 
 
 def zero_scalar(name):
@@ -329,7 +335,7 @@ def zero_scalar(name):
     expressions that are non-contributors -- MP2 Lagrangian includes these terms as part of
     the constraint equation. 
     """
-    return Expression.single(block([], Integral(name, ())), Fraction(0))
+    return Expression.single(block([], Integral(name, (), (), ())), Fraction(0))
 
 # --- projection manifolds (reference and excited determinants) ----------------
 
@@ -519,7 +525,7 @@ def kappa(name, p, q):
     surviving only at p = q where it matches that of a_q^ a_p, so the two cancel in
     the difference. Used in commutators for orbital response, e.g. [H_N, kappa].
     """
-    amp = Integral(name, (p, q), _KAPPA_SYM)
+    amp = Integral(name, (p, q), _KAPPA_SYM, ())
     return (
         Expression.single(block([cre(p, "gen"), ann(q, "gen")], amp), Fraction(1, 2))
         - Expression.single(block([cre(q, "gen"), ann(p, "gen")], amp), Fraction(1, 2))

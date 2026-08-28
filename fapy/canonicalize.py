@@ -73,18 +73,29 @@ def _tensor_generators(tensor, symmetry):
 
     Notes
     -----
-    Both symmetries travel on the tensor. If the tensor carries any annotation (a
-    ``symmetry`` or a ``hermitian`` generator set), it is governed ENTIRELY by that
-    annotation: the definitional part from ``tensor.symmetry`` and, only in a "real"
-    run, the Hermiticity part from ``tensor.hermitian``. This is name-independent, so
-    a freely-named Fock/ERI-type tensor is collected correctly and a tensor that
-    merely reuses the name "f"/"g" is not given a Hermiticity it does not possess. The
-    name-keyed fallback tables are consulted only for a BARE hand-built tensor that
-    carries no annotation at all.
+    Both symmetries travel on the tensor. A tensor whose symmetry was DECLARED is
+    governed entirely by what it carries: the definitional part from
+    ``tensor.symmetry`` and, only in a "real" run, the Hermiticity part from
+    ``tensor.hermitian``. This is name-independent, so a freely-named Fock/ERI-type
+    tensor is collected correctly and a tensor that merely reuses the name "f"/"g" is
+    not given a symmetry it does not possess.
+
+    Declared means ``symmetry`` or ``hermitian`` is not None -- NOT that either is
+    non-empty. ``()`` is a declaration that there is no symmetry, and it must be
+    honoured: a one-body operator has no definitional symmetry by construction, so
+    testing truthiness would send every such operator to the name tables however it
+    was built. That was a real defect -- ``O_N("f", ...)`` silently acquired the Fock
+    Hermiticity from its name, and renaming it changed the equation.
+
+    The name-keyed fallback tables are therefore consulted only for a BARE tensor
+    whose symmetry was never declared at all: a hand-built ``Integral("g", ...)`` in a
+    test, say. Everything the operator library builds declares, ``O_N`` included, so
+    nothing a user constructs is ever overridden by what it happens to be called.
     """
-    if tensor.symmetry or tensor.hermitian:
-        definitional = list(tensor.symmetry)
-        hermitian = list(tensor.hermitian) if symmetry == "real" else []
+    declared = tensor.symmetry is not None or tensor.hermitian is not None
+    if declared:
+        definitional = list(tensor.symmetry or ())
+        hermitian = list(tensor.hermitian or ()) if symmetry == "real" else []
     else:
         definitional = list(_SYMMETRY_GENERATORS.get(tensor.name, []))
         hermitian = list(_HERMITIAN_SYMMETRY.get(symmetry, {}).get(tensor.name, []))

@@ -239,24 +239,39 @@ Audit results (each examined; resolution noted):
   after. It was reachable from hand-built terms, and four layer-7 tests were pinning the
   artifact, which is how it was found. Regression: `test_007_canonicalize.py`
   (`test_a_term_that_vanishes_on_its_own_symmetry_is_dropped` and the two beside it).
-- **[OPEN — found in the layer-7 test audit] An EMPTY symmetry annotation is
-  indistinguishable from NO annotation, so the name table still fires.**
-  `_tensor_generators` branches on `if tensor.symmetry or tensor.hermitian:` — both empty
-  tuples are falsy, so a tensor that carries no *definitional* symmetry falls through to
-  the name-keyed fallback no matter how it was built. A one-body operator has no
-  definitional symmetry by construction, so `O_N("f", [("p","gen")], [("q","gen")])`
-  produces `symmetry=() hermitian=()` and is silently handed the real-mode Fock
+- **[FIXED] An empty symmetry annotation was indistinguishable from NO annotation,
+  so the name table still fired.** `_tensor_generators` branched on
+  `if tensor.symmetry or tensor.hermitian:` — both empty tuples are falsy, so a tensor
+  carrying no *definitional* symmetry fell through to the name-keyed fallback however
+  it was built. A one-body operator has no definitional symmetry **by construction**,
+  so `O_N("f", [("p","gen")], [("q","gen")])` was silently handed the real-mode Fock
   Hermiticity `f_pq = f_qp` **purely because of its name** — renaming it to `"myop"`
-  changes the collected equation. This is the exact name-sniffing that
-  `Integral.hermitian` was introduced to eliminate; the earlier fix closed the
-  *annotated* case and left the un-annotatable one open. Narrow (needs empty symmetry
-  AND empty hermitian AND a name in `_SYMMETRY_GENERATORS`/`_HERMITIAN_SYMMETRY`) but
-  reachable from `O_N`, which is the user-facing custom-operator primitive, and wrong in
-  the silent direction: a merge that should not happen, with a doubled coefficient.
-  **Fix:** a sentinel (e.g. `symmetry=None` meaning "not declared" vs `()` meaning
-  "declared to have none"), so the fallback fires only on genuine absence. Pinned as a
-  `strict=True` xfail:
-  `test_007_canonicalize.py::test_a_custom_operator_does_not_inherit_hermiticity_from_its_name`.
+  changed the collected equation. Exactly the name-sniffing `Integral.hermitian` was
+  introduced to eliminate; the earlier fix closed the *annotated* case and left the
+  un-annotatable one open. Two further modes came from the same root, since the table
+  entries have a fixed arity that nothing checked: a one-body tensor named `"g"`/`"t2"`
+  reached 4-index permutations and **crashed** (`IndexError`), and a four-index tensor
+  named `"f"` reached the 2-index Hermiticity permutation and **silently lost two
+  indices** (`f(i,j,a,b)` → `f(i,j)`, the shorter tuple winning the lexicographic
+  minimum).
+  **Fix: `symmetry`/`hermitian` default to `None` = "never declared"; `()` = "declared,
+  and there is none."** `_tensor_generators` branches on `is not None`. Every library
+  constructor now declares explicitly — `F_N` and the singles amplitudes pass `()` for
+  the symmetry they genuinely lack — and `O_N` declares by construction, since its own
+  defaults are `()`. **The user's rule: choosing `O_N` is the point at which they take
+  control of the operator, so a name collision must never override them.** `O_N` under
+  any name now gets exactly the symmetry written in the call and nothing else.
+  The name tables survive for their intended purpose only: a **bare** hand-built
+  `Integral("g", ...)` in a test, which declares nothing. Regression:
+  `test_007_canonicalize.py::test_a_custom_operator_does_not_inherit_symmetry_from_its_name`
+  (was a `strict` xfail; the fix turned it XPASS and it is now an ordinary test) beside
+  `test_a_bare_tensor_falls_back_to_the_name_table`, which pins the fallback.
+  **Residual, not fixed:** `_symmetry_orbit` still applies a generator without checking
+  its permutation length against the tensor's rank, so the crash and the truncation are
+  still reachable for a bare hand-built tensor whose name collides at the wrong arity
+  (`Integral("g", ("i","a"))`, `Integral("f", ("i","j","a","b"))`). Test-only code
+  constructs bare tensors, so the surface is small, but a length check in
+  `_symmetry_orbit` would turn silent index loss into a loud error and is worth doing.
 - **[OPEN — deferred] A malformed operator string is accepted silently.** Nothing validates
   that a label names *one* index. `declared_spaces` catches only a label declared with two
   different *spaces*; `block()` and `group_string()` validate nothing at all, so a degenerate

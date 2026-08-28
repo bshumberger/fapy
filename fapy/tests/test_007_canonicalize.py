@@ -199,31 +199,34 @@ def test_reusing_a_privileged_name_does_not_confer_its_symmetry():
     assert len(canonicalize(pair(_INTEGRAL_HERMITIAN), symmetry="complex")) == 2
 
 
-@pytest.mark.xfail(reason="an empty annotation is indistinguishable from no "
-                          "annotation, so a tensor with no definitional symmetry "
-                          "still falls through to the name table",
-                   strict=True)
-def test_a_custom_operator_does_not_inherit_hermiticity_from_its_name():
+def test_a_custom_operator_does_not_inherit_symmetry_from_its_name():
     """O_N("f", ...) must not acquire f_pq = f_qp just for being called "f".
 
-    ``_tensor_generators`` takes the annotation branch only when the tensor has a
-    truthy ``symmetry`` or ``hermitian``. A one-body operator has NO definitional
-    symmetry, so both are empty and it falls through to the name table -- and a
-    custom, generally non-Hermitian operator named "f" is silently given the
-    real-mode Fock Hermiticity. Renaming it to "myop" changes the equation, which
-    is exactly the name-sniffing the annotation system exists to remove.
+    Choosing O_N is the point at which the user takes control of the operator, so
+    a name collision must never override them. The same one-body operator under
+    two names must give the same equation -- it is the same physics.
 
-    Narrow but reachable: it needs an empty symmetry AND an empty hermitian AND a
-    name in the fallback table. The fix is a sentinel that distinguishes "declared
-    to have none" from "not declared".
+    This needs the declared/undeclared distinction to be about None rather than
+    emptiness. A one-body operator has NO definitional symmetry by construction,
+    so testing truthiness sent every such operator to the name tables however it
+    was built, and O_N("f", ...) silently picked up the real-mode Fock
+    Hermiticity -- exactly the name-sniffing the annotation system exists to
+    remove.
     """
-    custom = op.O_N("f", [("p", "gen")], [("q", "gen")])
-    integral = custom.terms[0].blocks[0].integral
+    def collected(name):
+        custom = op.O_N(name, [("p", "gen")], [("q", "gen")])
+        integral = custom.terms[0].blocks[0].integral
+        # Declared, not merely empty: () is an assertion that there is none.
+        assert integral.symmetry == () and integral.hermitian == ()
+        return canonicalize(
+            [Term(Fraction(1), [Integral(name, ("i", "a"), (), ())], dict(OV)),
+             Term(Fraction(1), [Integral(name, ("a", "i"), (), ())], dict(OV))],
+            symmetry="real")
 
-    collected = canonicalize(
-        fock_transpose_pair("f", integral.hermitian), symmetry="real")
-
-    assert len(collected) == 2
+    # Two Fock orderings stay distinct: nothing declared them equal.
+    assert len(collected("f")) == 2
+    # And the name makes no difference at all, which is the whole point.
+    assert len(collected("myop")) == len(collected("f"))
 
 
 def test_a_bare_tensor_falls_back_to_the_name_table():

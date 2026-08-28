@@ -117,15 +117,20 @@ class Integral:
     indices : tuple of str
         Ordered index labels. Order is significant -- g("p","q","r","s") differs
         from g("q","p","r","s") until symmetry is applied.
-    symmetry : tuple
+    symmetry : tuple or None
         Definitional (mode-independent) permutational symmetry as a tuple of
         (permutation, sign) generators. These follow from relabelling the summed
         particle coordinates and hold for real and complex orbitals alike.
-    hermitian : tuple
+        ``None`` means the symmetry was never DECLARED, which is a different
+        statement from ``()`` -- declared, and there is none. Only an undeclared
+        tensor falls back to canonicalize's name-keyed tables; a declared one is
+        governed entirely by what it carries, whatever it is named.
+    hermitian : tuple or None
         Hermiticity (mode-dependent) symmetry, as (permutation, sign) generators,
         applied only in a real-orbital run (e.g. f_pq = f_qp, <pq||rs> = <rs||pq>).
         Like ``symmetry`` it travels with the object rather than being looked up by
-        name, so a freely-named Fock/ERI-type tensor is collected correctly.
+        name, so a freely-named Fock/ERI-type tensor is collected correctly, and
+        ``None`` vs ``()`` carries the same undeclared/declared-empty distinction.
     spin_rule : str
         Structural spin-coupling type, one of "fock", "eri", "amplitude" (or "" if
         unset). Read only by the closed-shell spin-adaptation post-processing pass,
@@ -146,8 +151,8 @@ class Integral:
     """
     name: str
     indices: Tuple[str, ...]
-    symmetry: Tuple = field(default=(), compare=False)
-    hermitian: Tuple = field(default=(), compare=False)
+    symmetry: Optional[Tuple] = field(default=None, compare=False)
+    hermitian: Optional[Tuple] = field(default=None, compare=False)
     spin_rule: str = field(default="", compare=False)
 
     def relabel_indices(self, rep):
