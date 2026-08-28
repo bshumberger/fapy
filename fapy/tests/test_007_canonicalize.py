@@ -186,8 +186,12 @@ def test_reusing_a_privileged_name_does_not_confer_its_symmetry():
     never consulted.
     """
     def pair(hermitian):
-        return [Term(Fraction(1), [eri(("i", "j", "a", "b"), hermitian)], dict(OOVV)),
-                Term(Fraction(1), [eri(("a", "b", "i", "j"), hermitian)], dict(OOVV))]
+        # Contracted against an amplitude: a LONE antisymmetrized integral summed
+        # over all its indices is identically zero, so it cannot carry this test.
+        return [Term(Fraction(1), [eri(("i", "j", "a", "b"), hermitian),
+                                   amplitude(("i", "j", "a", "b"))], dict(OOVV)),
+                Term(Fraction(1), [eri(("a", "b", "i", "j"), hermitian),
+                                   amplitude(("i", "j", "a", "b"))], dict(OOVV))]
 
     # Named "g", annotated WITHOUT the pair exchange -> <ij||ab> and <ab||ij> differ.
     assert len(canonicalize(pair(()), symmetry="real")) == 2
@@ -250,9 +254,11 @@ def test_hermiticity_relations_apply_only_to_real_orbitals():
     For a complex Hermitian Hamiltonian the two orderings are complex conjugates
     -- different numbers -- so collecting them together would corrupt that case.
     """
-    for pair in (fock_transpose_pair("f", _FOCK_HERMITIAN),
-                 [Term(Fraction(1), [eri(("i", "j", "a", "b"))], dict(OOVV)),
-                  Term(Fraction(1), [eri(("a", "b", "i", "j"))], dict(OOVV))]):
+    eri_pair = [Term(Fraction(1), [eri(("i", "j", "a", "b")),
+                                   amplitude(("i", "j", "a", "b"))], dict(OOVV)),
+                Term(Fraction(1), [eri(("a", "b", "i", "j")),
+                                   amplitude(("i", "j", "a", "b"))], dict(OOVV))]
+    for pair in (fock_transpose_pair("f", _FOCK_HERMITIAN), eri_pair):
         assert len(canonicalize(pair, symmetry="complex")) == 2
 
         merged = canonicalize(pair, symmetry="real")
@@ -330,13 +336,17 @@ def test_a_term_reduces_to_slots_a_sign_and_its_spaces():
 
 
 def test_the_sign_of_the_renaming_is_carried_out_with_the_key():
-    """t_ji^ab canonicalizes to -t_ij^ab: the reduction is signed, not just sorted."""
-    term = Term(Fraction(1), [amplitude(("j", "i", "a", "b"))], dict(OOVV))
+    """<ij||ab> t_ji^ab = - <ij||ab> t_ij^ab: the reduction is signed, not sorted.
 
-    assert canonicalize([term]) == [CanonicalTerm(Fraction(-1),
-                                                  [amplitude(("O0", "O1", "V0", "V1"))],
-                                                  {"O0": "occ", "O1": "occ",
-                                                   "V0": "virt", "V1": "virt"})]
+    Only the amplitude is written with its occupied pair reversed, so the term
+    picks up one sign flip on the way to the canonical arrangement. Pairing it
+    with the integral is what makes the term nonzero: a lone t_ji^ab summed over
+    every index vanishes on its own antisymmetry.
+    """
+    term = Term(Fraction(1), [eri(("i", "j", "a", "b")),
+                              amplitude(("j", "i", "a", "b"))], dict(OOVV))
+
+    assert repr(canonicalize([term])[0]) == "-1 g(O0,O1,V0,V1) t2(O0,O1,V0,V1)"
 
 
 def test_every_dummy_assignment_is_tried_and_the_smallest_key_wins():
@@ -378,35 +388,92 @@ def test_an_external_is_never_renamed_though_symmetry_may_move_it():
     tensor being derived. Tensor symmetry may still permute them into a different
     slot, which is a relabelling of the SAME object, not a renaming.
     """
-    term = Term(Fraction(1), [amplitude(("k", "l", "c", "d"))],
+    term = Term(Fraction(1), [Integral("f", ("k", "c")),
+                              amplitude(("k", "l", "c", "d"))],
                 {"k": "occ", "l": "occ", "c": "virt", "d": "virt"})
 
-    assert repr(canonicalize([term])[0]) == "+1 t2(O0,O1,V0,V1)"
-    assert repr(canonicalize([term], externals=("k", "c"))[0]) == "+1 t2(O0,k,V0,c)"
+    assert repr(canonicalize([term])[0]) == "+1 f(O0,V0) t2(O0,O1,V0,V1)"
+    assert repr(canonicalize([term], externals=("k", "c"))[0]) == \
+        "+1 f(k,c) t2(O0,k,V0,c)"
 
 
 # --- collecting a list of terms -----------------------------------------------
 
 def test_terms_differing_only_in_dummy_names_are_one_term():
-    """t_ij^ab and t_kl^cd are the same summed quantity, so they add."""
+    """<ij||ab> t_ij^ab and <kl||cd> t_kl^cd are one summed quantity, so they add."""
     collected = canonicalize([
-        Term(Fraction(1, 2), [amplitude(("i", "j", "a", "b"))], dict(OOVV)),
-        Term(Fraction(1, 2), [amplitude(("k", "l", "c", "d"))],
+        Term(Fraction(1, 2), [eri(("i", "j", "a", "b")),
+                              amplitude(("i", "j", "a", "b"))], dict(OOVV)),
+        Term(Fraction(1, 2), [eri(("k", "l", "c", "d")),
+                              amplitude(("k", "l", "c", "d"))],
              {"k": "occ", "l": "occ", "c": "virt", "d": "virt"}),
     ])
 
-    assert collected == [CanonicalTerm(Fraction(1),
-                                       [amplitude(("O0", "O1", "V0", "V1"))],
-                                       {"O0": "occ", "O1": "occ",
-                                        "V0": "virt", "V1": "virt"})]
+    assert [repr(t) for t in collected] == \
+        ["+1 g(O0,O1,V0,V1) t2(O0,O1,V0,V1)"]
 
 
 def test_terms_that_cancel_exactly_are_dropped_not_reported_as_zero():
-    """A zero coefficient means the contribution is absent from the equation."""
+    """A zero coefficient means the contribution is absent from the equation.
+
+    Two terms of the same canonical key and opposite sign: <ij||ab> t_ij^ab and
+    <ij||ab> t_ji^ab, the second of which reduces to minus the first.
+    """
     assert canonicalize([
-        Term(Fraction(1), [amplitude(("i", "j", "a", "b"))], dict(OOVV)),
-        Term(Fraction(1), [amplitude(("j", "i", "a", "b"))], dict(OOVV)),
+        Term(Fraction(1), [eri(("i", "j", "a", "b")),
+                           amplitude(("i", "j", "a", "b"))], dict(OOVV)),
+        Term(Fraction(1), [eri(("i", "j", "a", "b")),
+                           amplitude(("j", "i", "a", "b"))], dict(OOVV)),
     ]) == []
+
+
+def test_a_term_that_vanishes_on_its_own_symmetry_is_dropped():
+    """sum_ij t_ij^ab = 0: an antisymmetric tensor summed over its own pair.
+
+    A lone antisymmetric amplitude with every index summed is identically zero,
+    and so is a lone antisymmetrized integral. This is NOT the cancellation of
+    two terms against each other -- there is only one term, and it vanishes on
+    its own.
+
+    Relabelling summed indices never changes a term's value, so every dummy
+    assignment expresses the same quantity. Here the assignment i<->j reaches the
+    same canonical key with the opposite sign, giving T = +X and T = -X at once,
+    hence T = 0. Left undetected the term would be emitted with whichever sign the
+    enumeration reached first, since the two assignments tie on the key -- a
+    canonical form decided by iteration order.
+    """
+    assert canonicalize([Term(Fraction(1), [amplitude(("i", "j", "a", "b"))],
+                              dict(OOVV))]) == []
+    assert canonicalize([Term(Fraction(1), [amplitude(("j", "i", "a", "b"))],
+                              dict(OOVV))]) == []
+    assert canonicalize([Term(Fraction(1), [eri(("i", "j", "a", "b"))],
+                              dict(OOVV))]) == []
+
+
+def test_holding_indices_external_makes_the_same_tensor_survive():
+    """The vanishing is a property of the SUM, not of the tensor.
+
+    t_ij^ab is zero because BOTH of its antisymmetric pairs are summed over, and
+    either one alone is enough to kill it: fixing only i still leaves a and b
+    summed, and t is antisymmetric in those too. Fix one index of each pair -- as
+    a projection onto <Phi_i^a| would -- and no relabelling maps the term onto
+    minus itself, so it stands.
+    """
+    term = Term(Fraction(1), [amplitude(("i", "j", "a", "b"))], dict(OOVV))
+
+    assert canonicalize([term]) == []
+    assert canonicalize([term], externals=("i",)) == []
+    assert repr(canonicalize([term], externals=("i", "a"))[0]) == "+1 t2(O0,i,V0,a)"
+
+
+def test_a_term_with_no_symmetry_to_vanish_on_is_kept():
+    """The Fock matrix is bare, so f_ia summed over i and a is not zero.
+
+    The check must fire only on a genuine self-antisymmetry; a tensor whose
+    symmetry group cannot produce a sign flip can never trigger it.
+    """
+    assert repr(canonicalize([Term(Fraction(1), [Integral("f", ("i", "a"))],
+                                   dict(OV))])[0]) == "+1 f(O0,V0)"
 
 
 def test_collecting_nothing_gives_nothing():
@@ -416,9 +483,11 @@ def test_collecting_nothing_gives_nothing():
 
 def test_the_collected_equation_is_sorted_by_key():
     """Output order is deterministic, so a derivation is reproducible."""
+    lam = Integral("λ", ("i", "j", "a", "b"), _DOUBLES_SYM)
     collected = canonicalize([
-        Term(Fraction(1), [amplitude(("i", "j", "a", "b"))], dict(OOVV)),
-        Term(Fraction(1), [eri(("i", "j", "a", "b"))], dict(OOVV)),
+        Term(Fraction(1), [amplitude(("i", "j", "a", "b")), lam], dict(OOVV)),
+        Term(Fraction(1), [eri(("i", "j", "a", "b")),
+                           amplitude(("i", "j", "a", "b"))], dict(OOVV)),
         Term(Fraction(1), [Integral("f", ("i", "a"))], dict(OV)),
     ])
 

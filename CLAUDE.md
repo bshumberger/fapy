@@ -217,6 +217,28 @@ Audit results (each examined; resolution noted):
 - **[HARDENED] External space read from spelling before the table.** `canonicalize`'s
   space rebuild now checks the externals table before the `O#/V#` spelling, so an external
   spelled with a leading uppercase `O`/`V` keeps its declared space.
+- **[FIXED] Canonicalization's sign was decided by iteration order for a term that
+  vanishes on its own symmetry.** `canonicalize_term` enumerates every assignment of
+  dummies to canonical slots and keeps the smallest key. Relabelling summed indices
+  never changes a term's value, so every assignment expresses the *same* quantity:
+  `T = s_σ · Σ g(K_σ)`. If two assignments reach the **same key with opposite signs**,
+  then `T = +X` and `T = −X` at once, so **T = 0**. The engine did not notice, and
+  emitted `±1` depending on which assignment the enumeration reached first — the two
+  tie on the key, so `key < best_key` never fires and the first one wins. A canonical
+  form decided by iteration order is not a canonical form.
+  The simplest instance is a lone antisymmetric amplitude summed over all its indices:
+  `Σ_ij t_ij^ab = 0`, and *either* antisymmetric pair alone is enough to kill it (fixing
+  only `i` still leaves `a`,`b` summed). `canonicalize_term` now returns `None` for such
+  a term — matching `resolve_term`'s established "this term vanishes" convention — and
+  `canonicalize` skips it. Note the two distinct ways a term leaves an equation: it may
+  vanish on its **own** symmetry (this check), or several distinct terms may land on one
+  key and **cancel against each other** (summed coefficient zero, dropped at the end).
+  **Not reachable from a real derivation** — zero ambiguous terms out of 227 raw terms
+  across the MP2 energy, MP2 doubles, CISD singles, CCSD T2 residual, and the
+  two-particle density; all four input scripts produce byte-identical output before and
+  after. It was reachable from hand-built terms, and four layer-7 tests were pinning the
+  artifact, which is how it was found. Regression: `test_007_canonicalize.py`
+  (`test_a_term_that_vanishes_on_its_own_symmetry_is_dropped` and the two beside it).
 - **[OPEN — found in the layer-7 test audit] An EMPTY symmetry annotation is
   indistinguishable from NO annotation, so the name table still fires.**
   `_tensor_generators` branches on `if tensor.symmetry or tensor.hermitian:` — both empty

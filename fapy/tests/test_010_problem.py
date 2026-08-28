@@ -136,10 +136,11 @@ def test_an_empty_externals_tuple_is_honoured_not_treated_as_absent():
                       externals=())
 
     assert problem.external_indices() == ()
-    # The same four contractions collect the same way, but with nothing held fixed
-    # the projection's labels are summed dummies too and are renamed onto the
-    # engine's canonical slots.
-    assert [repr(t) for t in problem.derive()] == ["+1 t(O0,O1,V0,V1)"]
+    # And the equation genuinely changes: with nothing held fixed every index of
+    # t_ij^ab is summed, and an amplitude antisymmetric in i<->j and a<->b summed
+    # over both pairs is identically zero. The externals are what make this a
+    # tensor equation rather than a vanishing number.
+    assert problem.derive() == []
 
 
 # --- derive -------------------------------------------------------------------
